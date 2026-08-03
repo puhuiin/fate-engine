@@ -23,6 +23,12 @@ export interface BuildAppOpts {
    * 缺省读取 CORS_ORIGIN 环境变量（逗号分隔）；均未配置时允许全部来源（开发便利）。
    */
   corsOrigins?: string[] | true;
+  /**
+   * 是否信任反向代理的 X-Forwarded-For（取真实客户端 IP 做限流分桶）。
+   * 传 true 信任全部；传 number 信任最右 N 跳；缺省读取 TRUST_PROXY 环境变量
+   * （'true'/'1' 或数字）；未配置时不信任（直连场景）。
+   */
+  trustProxy?: boolean | number | string[];
 }
 
 /** 请求体上限（JSON API 场景 64KB 足够，防超大 body 资源耗尽） */
@@ -41,8 +47,20 @@ function parseCorsOrigins(): string[] | null {
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
+function parseTrustProxy(): boolean | number | undefined {
+  const raw = process.env.TRUST_PROXY;
+  if (!raw) return undefined;
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 0) return n;
+  return raw === '1' || raw === 'true';
+}
+
 export function buildApp(db: Db, opts: BuildAppOpts = {}) {
-  const app = Fastify({ logger: opts.logger ?? true, bodyLimit: BODY_LIMIT });
+  const app = Fastify({
+    logger: opts.logger ?? true,
+    bodyLimit: BODY_LIMIT,
+    trustProxy: opts.trustProxy ?? parseTrustProxy(),
+  });
 
   const whitelist = opts.corsOrigins ?? parseCorsOrigins();
   app.register(cors, {

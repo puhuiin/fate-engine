@@ -37,7 +37,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 5 组确定性回归脚本（44 + 8 + 15 + 42 + 88 = 197 断言） |
+| 校验 | 5 组确定性回归脚本（44 + 8 + 15 + 42 + 91 = 200 断言） |
 
 ---
 
@@ -67,6 +67,7 @@ npm run dev
 | `FATE_SECRET` | 开发内置密钥 | JWT/签名的唯一私密源，**生产环境必填，未设置将拒绝启动** |
 | `CORS_ORIGIN` | 允许全部来源 | CORS 白名单（逗号分隔），生产建议显式配置 |
 | `RATE_LIMIT_MAX` | `300` | 全局接口每 IP 每分钟请求上限（认证/注册接口固定 20） |
+| `TRUST_PROXY` | 不信任 | 反向代理后按 `X-Forwarded-For` 取真实客户端 IP 限流分桶 |
 
 ### 构建生产版本
 
@@ -80,14 +81,14 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（197 断言）
+# 全量回归（200 断言）
 npm run verify -w @fate/server
 
 # 分块验证
 npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时边界（8 用例）
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆（15 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（42 断言）
-npm run verify:api -w @fate/server  # 接口层（88 断言，内存 SQLite + inject）
+npm run verify:api -w @fate/server  # 接口层（91 断言，内存 SQLite + inject）
 ```
 
 断言覆盖真实业务基准：如 `2002-11-29 20:40 北京男` → 真太阳时 20.604、戌时、日主辛/金、日柱辛丑、L4 事业 68。
@@ -181,7 +182,8 @@ fate-engine/
 
 - **密钥管理**：`FATE_SECRET` 为 JWT/签名唯一私密源，生产缺省拒绝启动（显式失败优于静默弱密钥）
 - **鉴权**：`timingSafeEqual` 恒定时间比较 + token payload 严格校验 + 长度上限（1024）+ `Bearer` 前缀严格校验
-- **速率限制**：进程内 IP 滑动窗口（零依赖自研），全局 300 次/分钟、认证/注册接口 20 次/分钟，超限统一 `429` ApiResp
+- **速率限制**：进程内 IP 滑动窗口（零依赖自研），全局 300 次/分钟、认证/注册接口 20 次/分钟，超限统一 `429` ApiResp；代理部署时经 `TRUST_PROXY` 按真实客户端 IP 分桶（防代理后全站同桶误伤）
+- **数据库并发**：WAL 模式 + `busy_timeout=5000` + `synchronous=NORMAL`，兼顾并发写入与吞吐
 - **请求体上限**：64KB `bodyLimit`，超大 body 直接 `413`
 - **CORS 白名单**：`CORS_ORIGIN` 环境变量控制允许来源（生产建议显式配置，而非全开）
 - **输入加固**：日期 round-trip 校验、时间范围校验、支付渠道白名单、字段限长（备注 ≤200、version ≤20 等）、`parseId` 仅接受十进制正整数

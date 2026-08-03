@@ -594,6 +594,56 @@ const bareBearer = await app.inject({
 });
 check('空 Bearer token 401', bareBearer.statusCode === 401 && bareBearer.json().code === 401);
 
+// ---------- 15. trustProxy：反向代理后按真实客户端 IP 限流分桶 ----------
+// 15.1 开启 trustProxy：X-Forwarded-For 决定分桶，不同真实 IP 桶互不影响
+const tpDb = createDb(':memory:');
+const tpApp: FastifyInstance = buildApp(tpDb, {
+  logger: false,
+  rateLimit: { max: 2, windowMs: 60 * 1000 },
+  trustProxy: true,
+});
+const tpStatus: number[] = [];
+for (let i = 0; i < 3; i++) {
+  const r = await tpApp.inject({
+    method: 'GET',
+    url: '/api/v1/locations/search?q=bei',
+    headers: { 'x-forwarded-for': '203.0.113.10' },
+  });
+  tpStatus.push(r.statusCode);
+}
+check(
+  'trustProxy：同一真实 IP 前 2 次放行、第 3 次 429',
+  tpStatus.slice(0, 2).every((s) => s === 200) && tpStatus[2] === 429,
+);
+const otherIp = await tpApp.inject({
+  method: 'GET',
+  url: '/api/v1/locations/search?q=bei',
+  headers: { 'x-forwarded-for': '203.0.113.11' },
+});
+check('trustProxy：不同真实 IP 独立分桶放行', otherIp.statusCode === 200);
+tpDb.close();
+
+// 15.2 未开 trustProxy：XFF 被忽略，全部按直连地址同桶计数
+const noTpDb = createDb(':memory:');
+const noTpApp: FastifyInstance = buildApp(noTpDb, {
+  logger: false,
+  rateLimit: { max: 2, windowMs: 60 * 1000 },
+});
+const noTpStatus: number[] = [];
+for (let i = 0; i < 3; i++) {
+  const r = await noTpApp.inject({
+    method: 'GET',
+    url: '/api/v1/locations/search?q=bei',
+    headers: { 'x-forwarded-for': `203.0.113.${30 + i}` },
+  });
+  noTpStatus.push(r.statusCode);
+}
+check(
+  '未开 trustProxy：不同 XFF 仍同桶计数（第 3 次 429）',
+  noTpStatus.slice(0, 2).every((s) => s === 200) && noTpStatus[2] === 429,
+);
+noTpDb.close();
+
 db.close();
 
 if (failed > 0) {
