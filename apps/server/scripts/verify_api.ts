@@ -665,9 +665,7 @@ const updData = updAfter.json.data as Record<string, unknown>;
 check('PATCH 部分更新成功（仅改 note）', updPatch.status === 200 && updData.note === '仅改备注');
 check('PATCH 未传字段不被覆盖（time_precision 保持 fuzzy）', updData.time_precision === 'fuzzy');
 check('PATCH 未传字段不被覆盖（source_reliability 保持 family）', updData.source_reliability === 'family');
-const updSolar = await call('GET', '/api/v1/archives/:id', { token: tokenA }).then(() =>
-  call('GET', `/api/v1/archives/${updId}`, { token: tokenA }),
-);
+const updSolar = await call('GET', `/api/v1/archives/${updId}`, { token: tokenA });
 check('PATCH 未传字段不被覆盖（solar_time 保持 08:30）', (updSolar.json.data as { solar_time: string }).solar_time === '08:30');
 
 // null 显式置空时间字段

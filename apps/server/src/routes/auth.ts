@@ -115,52 +115,51 @@ export function authRoutes(
     async (req, reply) => {
       const parsed = phoneLoginSchema.safeParse(req.body);
       if (!parsed.success) {
-      return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
-    }
-    const { phone, code, nickname } = parsed.data;
-    const pending = db
-      .prepare(
-        `SELECT * FROM sms_code
-         WHERE phone = ? AND used = 0 AND expires_at > datetime('now') AND channel = 'login'
-         ORDER BY id DESC LIMIT 1`,
-      )
-      .get(phone) as
-      | (Record<string, unknown> & { id: number; code: string; fail_count?: number })
-      | undefined;
-    if (!pending || pending.code !== code) {
-      if (pending) {
-        const tried = Number(pending.fail_count ?? 0) + 1;
-        db.prepare('UPDATE sms_code SET fail_count = ? WHERE id = ?').run(tried, pending.id);
-        if (tried >= MAX_CODE_ATTEMPTS) {
-          db.prepare('UPDATE sms_code SET used = 1 WHERE id = ?').run(pending.id);
-        }
+        return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
       }
-      return reply.send(fail(403, '验证码错误或已过期'));
-    }
-    if (Number(pending.fail_count ?? 0) >= MAX_CODE_ATTEMPTS) {
-      return reply.send(fail(403, '尝试次数过多，请重新获取验证码'));
-    }
-    db.prepare('UPDATE sms_code SET used = 1 WHERE id = ?').run(pending.id);
-
-    let user = db
-      .prepare(`SELECT ${USER_PUBLIC_COLS} FROM sys_user WHERE phone = ?`)
-      .get(phone) as (Record<string, unknown> & { id: number }) | undefined;
-    if (!user) {
-      const info = db
+      const { phone, code, nickname } = parsed.data;
+      const pending = db
         .prepare(
-          'INSERT INTO sys_user (phone, phone_masked, nickname, register_channel) VALUES (?, ?, ?, ?)',
+          `SELECT * FROM sms_code
+           WHERE phone = ? AND used = 0 AND expires_at > datetime('now') AND channel = 'login'
+           ORDER BY id DESC LIMIT 1`,
         )
-        .run(phone, maskPhone(phone), nickname ?? `用户${phone.slice(-4)}`, 'phone');
-      const userId = Number(info.lastInsertRowid);
-      user = db.prepare(`SELECT ${USER_PUBLIC_COLS} FROM sys_user WHERE id = ?`).get(userId) as typeof user;
-    }
-    if (!user) {
-      return reply.send(fail(500, '用户创建失败'));
-    }
-    return reply.send(ok({ user, token: signToken(user.id) }, '登录成功'));
+        .get(phone) as
+        | (Record<string, unknown> & { id: number; code: string; fail_count?: number })
+        | undefined;
+      if (!pending || pending.code !== code) {
+        if (pending) {
+          const tried = Number(pending.fail_count ?? 0) + 1;
+          db.prepare('UPDATE sms_code SET fail_count = ? WHERE id = ?').run(tried, pending.id);
+          if (tried >= MAX_CODE_ATTEMPTS) {
+            db.prepare('UPDATE sms_code SET used = 1 WHERE id = ?').run(pending.id);
+          }
+        }
+        return reply.send(fail(403, '验证码错误或已过期'));
+      }
+      if (Number(pending.fail_count ?? 0) >= MAX_CODE_ATTEMPTS) {
+        return reply.send(fail(403, '尝试次数过多，请重新获取验证码'));
+      }
+      db.prepare('UPDATE sms_code SET used = 1 WHERE id = ?').run(pending.id);
+
+      let user = db
+        .prepare(`SELECT ${USER_PUBLIC_COLS} FROM sys_user WHERE phone = ?`)
+        .get(phone) as (Record<string, unknown> & { id: number }) | undefined;
+      if (!user) {
+        const info = db
+          .prepare(
+            'INSERT INTO sys_user (phone, phone_masked, nickname, register_channel) VALUES (?, ?, ?, ?)',
+          )
+          .run(phone, maskPhone(phone), nickname ?? `用户${phone.slice(-4)}`, 'phone');
+        const userId = Number(info.lastInsertRowid);
+        user = db.prepare(`SELECT ${USER_PUBLIC_COLS} FROM sys_user WHERE id = ?`).get(userId) as typeof user;
+      }
+      if (!user) {
+        return reply.send(fail(500, '用户创建失败'));
+      }
+      return reply.send(ok({ user, token: signToken(user.id) }, '登录成功'));
     },
   );
-
   /** 当前用户信息 */
   app.get('/api/v1/auth/me', { preHandler: requireAuth }, async (req) => {
     const user = db
