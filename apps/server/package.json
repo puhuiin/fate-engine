@@ -1,0 +1,30 @@
+{
+  "name": "@fate/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "verify:l1": "tsx scripts/verify_l1.ts",
+    "verify:l2": "tsx scripts/verify_l2.ts",
+    "verify:l3": "tsx scripts/verify_l3.ts",
+    "verify:api": "tsx scripts/verify_api.ts",
+    "verify": "tsx scripts/verify_all.ts && tsx scripts/verify_l1.ts && tsx scripts/verify_l2.ts && tsx scripts/verify_l3.ts && tsx scripts/verify_api.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "better-sqlite3": "^11.7.0",
+    "fastify": "^5.2.0",
+    "lunar-javascript": "^1.7.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

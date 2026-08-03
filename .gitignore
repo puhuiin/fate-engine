@@ -1,0 +1,21 @@
+# Node.js
+node_modules/
+*.tsbuildinfo
+apps/server/dist/
+apps/web/dist/
+
+# Runtime data (local SQLite databases)
+apps/server/data/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/

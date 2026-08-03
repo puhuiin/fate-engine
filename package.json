@@ -1,0 +1,17 @@
+{
+  "name": "fate-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "全域超验无限命运演算系统 · V13 工程化落地（分阶段开发）",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm run dev -w @fate/server\" \"npm run dev -w @fate/web\"",
+    "build": "npm run build -w @fate/server && npm run build -w @fate/web",
+    "start": "npm run start -w @fate/server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
