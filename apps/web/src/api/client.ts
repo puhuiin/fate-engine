@@ -8,6 +8,9 @@ export interface ApiResp<T> {
 
 const TOKEN_KEY = 'fate_token';
 
+/** 登录态变化事件：登录成功或 token 失效（401）时触发，供全局 UI（如顶部用户信息）同步刷新 */
+export const AUTH_CHANGED_EVENT = 'fate:auth-changed';
+
 /** 请求超时（毫秒），防止网络挂起导致界面无限 loading */
 const REQUEST_TIMEOUT = 15000;
 
@@ -17,6 +20,12 @@ export function getToken(): string {
 
 export function setToken(t: string): void {
   localStorage.setItem(TOKEN_KEY, t);
+  window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<ApiResp<T>> {
@@ -49,7 +58,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<ApiResp<
     throw new Error(`服务响应格式异常（HTTP ${res.status}）`);
   }
   if (body.code === 401) {
-    localStorage.removeItem(TOKEN_KEY);
+    clearToken();
+    throw new Error('登录已过期，请重新登录');
   }
   return body;
 }
@@ -325,8 +335,20 @@ export function getRecord(
   return request(`/api/v1/records/${id}`);
 }
 
-export function listRecords(): Promise<ApiResp<Array<Record<string, unknown>>>> {
-  return request('/api/v1/records');
+export interface RecordsPage {
+  list: Array<Record<string, unknown>>;
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export function listRecords(
+  page?: number,
+  pageSize?: number,
+): Promise<ApiResp<Array<Record<string, unknown>> | RecordsPage>> {
+  const qs =
+    page !== undefined && pageSize !== undefined ? `?page=${page}&pageSize=${pageSize}` : '';
+  return request(`/api/v1/records${qs}`);
 }
 
 export interface OrderInfo {

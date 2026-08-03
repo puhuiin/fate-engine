@@ -181,6 +181,17 @@ body {
   background: #faf4e4;
 }
 
+.pager {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 4px;
+}
+
+.pager .ghost:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;

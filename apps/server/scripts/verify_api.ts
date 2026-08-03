@@ -72,6 +72,10 @@ const halfToken = tokenA.split('.')[0];
 const halfRes = await call('GET', '/api/v1/archives', { token: halfToken });
 check('缺签名半截 token 401', halfRes.status === 401 && halfRes.json.code === 401);
 
+const hugeToken = `${tokenA}${'x'.repeat(2048)}`;
+const hugeRes = await call('GET', '/api/v1/archives', { token: hugeToken });
+check('超长 token 拒绝 401', hugeRes.status === 401 && hugeRes.json.code === 401);
+
 // ---------- 3. 档案创建 ----------
 const arc1 = await call('POST', '/api/v1/archives', {
   token: tokenA,
@@ -269,6 +273,36 @@ const badStatus = await call('PATCH', `/api/v1/plans/${planId}`, {
 });
 check('打卡非法 status 不更新且语义明确', badStatus.status === 200 && badStatus.json.msg === '未更新任何字段');
 
+const planStatusBefore = (
+  db.prepare('SELECT status FROM luck_plan WHERE id = ?').get(planId) as { status: string }
+).status;
+const mixedBad = await call('PATCH', `/api/v1/plans/${planId}`, {
+  token: tokenA,
+  body: { status: 'pending', note: 'y'.repeat(201) },
+});
+const planStatusAfter = (
+  db.prepare('SELECT status FROM luck_plan WHERE id = ?').get(planId) as { status: string }
+).status;
+check(
+  'status+超长备注同时提交 400 且状态未被写入（部分成功防护）',
+  mixedBad.status === 400 && mixedBad.json.code === 400 && planStatusAfter === planStatusBefore,
+);
+
+const planContentBefore = (
+  db.prepare('SELECT content FROM luck_plan WHERE id = ?').get(planId) as { content: string }
+).content;
+const blankNote = await call('PATCH', `/api/v1/plans/${planId}`, {
+  token: tokenA,
+  body: { note: '   ' },
+});
+const planContentAfter = (
+  db.prepare('SELECT content FROM luck_plan WHERE id = ?').get(planId) as { content: string }
+).content;
+check(
+  '空白备注不追加空行',
+  blankNote.status === 200 && planContentAfter === planContentBefore,
+);
+
 const risks = await call('GET', `/api/v1/records/${record1}/risks`, { token: tokenA });
 const riskLevels = (risks.json.data?.risks as Array<{ risk_level: number }> | undefined)?.map(
   (r) => r.risk_level,
@@ -378,6 +412,10 @@ const badId = await call('GET', `/api/v1/records/abc`, { token: tokenA });
 check('非数字 id 返回 400 而非 500', badId.status === 400 && badId.json.code === 400);
 const badId2 = await call('GET', `/api/v1/records/-5`, { token: tokenA });
 check('负 id 返回 400', badId2.status === 400 && badId2.json.code === 400);
+const badHex = await call('GET', '/api/v1/records/0x10', { token: tokenA });
+check('十六进制 id 拒绝 400（parseId 严格十进制）', badHex.status === 400 && badHex.json.code === 400);
+const badSci = await call('GET', '/api/v1/records/1e2', { token: tokenA });
+check('科学计数法 id 拒绝 400（parseId 严格十进制）', badSci.status === 400 && badSci.json.code === 400);
 const badPay = await call('POST', `/api/v1/orders/xyz/pay`, {
   token: tokenA,
   body: { channel: 'mock' },
@@ -404,6 +442,26 @@ const pageNoArg = await call('GET', `/api/v1/records`, { token: tokenA });
 check(
   '不分页时保持数组语义兼容',
   pageNoArg.status === 200 && Array.isArray(pageNoArg.json.data) && (pageNoArg.json.data as unknown[]).length >= 2,
+);
+const pageClamp = await call('GET', '/api/v1/records?page=999&pageSize=9999', { token: tokenA });
+check(
+  'pageSize 超上限 clamp 到 50',
+  pageClamp.status === 200 && pageClamp.json.data?.pageSize === 50,
+);
+const pageHuge = await call('GET', '/api/v1/records?page=1e999', { token: tokenA });
+check(
+  'page 非有限数不 500，降级为 1',
+  pageHuge.status === 200 && pageHuge.json.data?.page === 1,
+);
+const pageBigInt = await call('GET', '/api/v1/records?page=99999999999999999999', { token: tokenA });
+check(
+  'page 超大有限数不 500，clamp 到 100000',
+  pageBigInt.status === 200 && pageBigInt.json.data?.page === 100000,
+);
+const pageFloat = await call('GET', '/api/v1/records?pageSize=2.5', { token: tokenA });
+check(
+  'pageSize 小数不 500，floor 为整数',
+  pageFloat.status === 200 && pageFloat.json.data?.pageSize === 2,
 );
 const listRec = (pageNoArg.json.data as Array<Record<string, unknown>>)[0];
 check(

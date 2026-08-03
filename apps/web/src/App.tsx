@@ -4,17 +4,24 @@ import Input from './pages/Input';
 import Loading from './pages/Loading';
 import Report from './pages/Report';
 import History from './pages/History';
-import { getMe } from './api/client';
+import { AUTH_CHANGED_EVENT, getMe } from './api/client';
 
 export default function App() {
   const [user, setUser] = useState<{ phone_masked: string | null; nickname: string } | null>(null);
 
   useEffect(() => {
-    if (localStorage.getItem('fate_token')) {
+    const refresh = () => {
+      if (!localStorage.getItem('fate_token')) {
+        setUser(null);
+        return;
+      }
       getMe()
         .then((res) => setUser(res.data))
         .catch(() => setUser(null));
-    }
+    };
+    refresh();
+    window.addEventListener(AUTH_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
   }, []);
 
   return (

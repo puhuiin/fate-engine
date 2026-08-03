@@ -61,6 +61,10 @@ export function planRoutes(app: FastifyInstance, db: Db): void {
       return reply.send(fail(403, '请先解锁深度报告再执行改运打卡'));
     }
 
+    const note = String(body.note ?? '').trim();
+    if (body.note !== undefined && note.length > 200) {
+      return reply.send(fail(400, '备注长度 ≤200'));
+    }
     const status = body.status === 'done' ? 'done' : body.status === 'pending' ? 'pending' : null;
     if (status) {
       db.prepare(
@@ -69,11 +73,7 @@ export function planRoutes(app: FastifyInstance, db: Db): void {
          WHERE id = ?`,
       ).run(status, status, id);
     }
-    const note = String(body.note ?? '').trim();
-    if (body.note !== undefined && note.length > 200) {
-      return reply.send(fail(400, '备注长度 ≤200'));
-    }
-    if (body.note !== undefined) {
+    if (body.note !== undefined && note) {
       db.prepare('UPDATE luck_plan SET content = content || char(10) || ? WHERE id = ?').run(
         note,
         id,

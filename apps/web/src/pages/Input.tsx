@@ -6,6 +6,7 @@ import {
   getArchive,
   guestLogin,
   searchCities,
+  setToken,
   updateArchive,
   type City,
 } from '../api/client';
@@ -30,6 +31,10 @@ const GENDERS = [
   { value: 'other', label: '其他/保密' },
 ];
 
+const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+  .toISOString()
+  .slice(0, 10);
+
 export default function Input() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -43,6 +48,7 @@ export default function Input() {
   const [cities, setCities] = useState<City[]>([]);
   const [city, setCity] = useState<City | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
 
   const timeVisible = precision === 'minute' || precision === 'hour';
@@ -50,6 +56,7 @@ export default function Input() {
   useEffect(() => {
     if (!editId) return;
     let alive = true;
+    setEditing(true);
     getArchive(editId)
       .then((res) => {
         if (!alive) return;
@@ -69,7 +76,8 @@ export default function Input() {
           });
         }
       })
-      .catch(() => setError('加载档案失败，请返回重试'));
+      .catch(() => setError('加载档案失败，请返回重试'))
+      .finally(() => alive && setEditing(false));
     return () => {
       alive = false;
     };
@@ -78,15 +86,19 @@ export default function Input() {
   useEffect(() => {
     const q = cityQuery.trim();
     if (!q || city) return;
+    let cancelled = false;
     const timer = setTimeout(async () => {
       try {
         const res = await searchCities(q);
-        if (res.code === 200) setCities(res.data);
+        if (!cancelled && res.code === 200) setCities(res.data);
       } catch {
         /* ignore */
       }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [cityQuery, city]);
 
   async function submit() {
@@ -107,7 +119,7 @@ export default function Input() {
     try {
       if (!localStorage.getItem('fate_token')) {
         const guest = await guestLogin();
-        localStorage.setItem('fate_token', guest.data.token);
+        setToken(guest.data.token);
       }
       const payload = {
         gender,
@@ -143,7 +155,7 @@ export default function Input() {
         <input
           type="date"
           min="1900-01-01"
-          max={new Date().toISOString().slice(0, 10)}
+          max={today}
           value={solarDate}
           onChange={(e) => setSolarDate(e.target.value)}
         />
@@ -228,8 +240,10 @@ export default function Input() {
 
       {error && <p className="error">{error}</p>}
 
-      <button className="primary" disabled={busy} onClick={submit}>
-        {busy ? '演算中…' : editId ? '保存并重新测算' : '开始测算'}
+      {editing && <p className="dim">正在读取档案…</p>}
+
+      <button className="primary" disabled={busy || editing} onClick={submit}>
+        {editing ? '读取中…' : busy ? '演算中…' : editId ? '保存并重新测算' : '开始测算'}
       </button>
 
       <p className="footnote">

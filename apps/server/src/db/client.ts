@@ -118,6 +118,7 @@ export function createDb(dbPath: string = DB_PATH): Db {
   db.pragma('foreign_keys = ON');
   db.exec(DDL);
   migrateColumns(db);
+  db.prepare("DELETE FROM sms_code WHERE expires_at <= datetime('now')").run();
   return db;
 }
 

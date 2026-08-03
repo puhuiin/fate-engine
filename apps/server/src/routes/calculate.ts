@@ -172,8 +172,13 @@ export function calculateRoutes(app: FastifyInstance, db: Db): void {
   /** 测算历史列表（可选分页：page/pageSize，缺省时返回全部保持兼容） */
   app.get('/api/v1/records', { preHandler: requireAuth }, async (req, reply) => {
     const query = req.query as { page?: string; pageSize?: string };
-    const page = Math.max(1, Number(query.page) || 1);
-    const pageSize = Math.min(50, Math.max(1, Number(query.pageSize) || 10));
+    const clampInt = (v: unknown, fallback: number, max: number): number => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return fallback;
+      return Math.min(max, Math.max(1, Math.floor(n)));
+    };
+    const page = clampInt(query.page, 1, 100000);
+    const pageSize = clampInt(query.pageSize, 10, 50);
     const paginate = query.page !== undefined || query.pageSize !== undefined;
     const base = `FROM calculate_record r JOIN user_birth_archive a ON r.archive_id = a.id AND a.user_id = r.user_id
                   WHERE r.user_id = ?`;

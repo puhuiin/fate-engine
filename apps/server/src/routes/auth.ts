@@ -27,6 +27,10 @@ export async function requireAuth(
 /** 同一验证码最多允许的错误尝试次数，超过则作废并要求重新获取 */
 const MAX_CODE_ATTEMPTS = 5;
 
+/** 用户对外字段白名单：剥离 phone（明文）等内部字段 */
+const USER_PUBLIC_COLS =
+  'id, phone_masked, nickname, register_channel, member_level, member_expire_at, created_at';
+
 export function authRoutes(app: FastifyInstance, db: Db): void {
   /** 游客临时测算 */
   app.post('/api/v1/auth/guest', async (req, reply) => {
@@ -117,9 +121,6 @@ export function authRoutes(app: FastifyInstance, db: Db): void {
       return reply.send(fail(403, '尝试次数过多，请重新获取验证码'));
     }
     db.prepare('UPDATE sms_code SET used = 1 WHERE id = ?').run(pending.id);
-
-    const USER_PUBLIC_COLS =
-      'id, phone_masked, nickname, register_channel, member_level, member_expire_at, created_at';
 
     let user = db
       .prepare(`SELECT ${USER_PUBLIC_COLS} FROM sys_user WHERE phone = ?`)

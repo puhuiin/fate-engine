@@ -38,8 +38,11 @@ export function signToken(userId: number): string {
   return `${Buffer.from(payload).toString('base64url')}.${sig}`;
 }
 
+/** token 长度上限：正常签发 token < 200 字符，超限直接拒绝，避免超大 payload 解码放大 */
+const TOKEN_MAX_LENGTH = 1024;
+
 export function verifyToken(token?: string): { userId: number } | null {
-  if (!token) return null;
+  if (!token || token.length > TOKEN_MAX_LENGTH) return null;
   const [b64, sig] = token.split('.');
   if (!b64 || !sig) return null;
   const payload = Buffer.from(b64, 'base64url').toString();
@@ -64,8 +67,10 @@ export function maskPhone(phone: string): string {
   return phone.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
 }
 
-/** 严格解析路径/请求 id：非正整数（含 NaN、负数、小数）返回 null，避免脏参数透传到 SQL */
+/** 严格解析路径/请求 id：仅接受十进制正整数串，拒绝十六进制、科学计数法与超 int64 数值，避免脏参数透传到 SQL */
 export function parseId(raw: unknown): number | null {
-  const n = Number(raw);
-  return Number.isInteger(n) && n > 0 ? n : null;
+  const s = String(raw ?? '').trim();
+  if (!/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
