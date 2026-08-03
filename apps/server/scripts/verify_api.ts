@@ -8,7 +8,7 @@ import { buildApp } from '../src/app.js';
 import type { FastifyInstance } from 'fastify';
 
 const db = createDb(':memory:');
-const app: FastifyInstance = buildApp(db, { logger: false });
+const app: FastifyInstance = buildApp(db, { logger: false, rateLimit: false });
 
 interface Resp {
   status: number;
@@ -507,6 +507,92 @@ const klOver = await call('POST', '/api/v1/kernel/log', {
   body: { version: 'V16', ruleName: 'x'.repeat(51), ruleDetail: '' },
 });
 check('kernel 超长 ruleName 拒绝 400', klOver.status === 400 && klOver.json.code === 400);
+
+// ---------- 14. 生产安全加固 ----------
+// 14.1 全局速率限制：独立实例（max=3），前 3 次放行、第 4 次起 429，响应为统一 ApiResp
+const rlDb = createDb(':memory:');
+const rlApp: FastifyInstance = buildApp(rlDb, {
+  logger: false,
+  rateLimit: { max: 3, windowMs: 60 * 1000 },
+});
+const rlStatus: number[] = [];
+for (let i = 0; i < 5; i++) {
+  const r = await rlApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+  rlStatus.push(r.statusCode);
+}
+check(
+  '全局限流：前 3 次放行、第 4 次起 429',
+  rlStatus.slice(0, 3).every((s) => s === 200) && rlStatus[3] === 429 && rlStatus[4] === 429,
+);
+const rlHit = await rlApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+check(
+  '限流响应为统一 ApiResp(code=429)',
+  rlHit.statusCode === 429 && (rlHit.json() as { code: number }).code === 429,
+);
+rlDb.close();
+
+// 14.2 认证接口限流：独立实例（默认开启限流），guest 连续调用第 21 次起 429
+const authRlDb = createDb(':memory:');
+const authRlApp: FastifyInstance = buildApp(authRlDb, { logger: false });
+const authStatus: number[] = [];
+for (let i = 0; i < 22; i++) {
+  const r = await authRlApp.inject({ method: 'POST', url: '/api/v1/auth/guest', payload: {} });
+  authStatus.push(r.statusCode);
+}
+check(
+  '认证接口限流：前 20 次放行、第 21 次起 429',
+  authStatus.slice(0, 20).every((s) => s === 200) &&
+    authStatus[20] === 429 &&
+    authStatus[21] === 429,
+);
+authRlDb.close();
+
+// 14.3 CORS 白名单：拒绝陌生来源，放行白名单来源
+const corsDb = createDb(':memory:');
+const corsApp: FastifyInstance = buildApp(corsDb, {
+  logger: false,
+  rateLimit: false,
+  corsOrigins: ['http://allowed.example'],
+});
+const evilCors = await corsApp.inject({
+  method: 'GET',
+  url: '/api/v1/locations/search?q=bei',
+  headers: { origin: 'https://evil.example' },
+});
+const okCors = await corsApp.inject({
+  method: 'GET',
+  url: '/api/v1/locations/search?q=bei',
+  headers: { origin: 'http://allowed.example' },
+});
+check(
+  'CORS 白名单拒绝陌生来源（无 ACAO 头）',
+  evilCors.headers['access-control-allow-origin'] === undefined,
+);
+check(
+  'CORS 白名单放行允许来源',
+  okCors.headers['access-control-allow-origin'] === 'http://allowed.example',
+);
+corsDb.close();
+
+// 14.4 请求体上限：>64KB body 返回 413 统一响应
+const bigBody = await call('POST', '/api/v1/auth/guest', {
+  body: { nickname: 'x'.repeat(100 * 1024) },
+});
+check('超大请求体拒绝 413', bigBody.status === 413 && bigBody.json.code === 413);
+
+// 14.5 requireAuth Bearer 严格校验：非 Bearer 前缀一律 401
+const basicAuth = await app.inject({
+  method: 'GET',
+  url: '/api/v1/archives',
+  headers: { authorization: 'Basic dXNlcjpwYXNz' },
+});
+check('Basic 头不带 Bearer 前缀 401', basicAuth.statusCode === 401 && basicAuth.json().code === 401);
+const bareBearer = await app.inject({
+  method: 'GET',
+  url: '/api/v1/archives',
+  headers: { authorization: 'Bearer   ' },
+});
+check('空 Bearer token 401', bareBearer.statusCode === 401 && bareBearer.json().code === 401);
 
 db.close();
 
