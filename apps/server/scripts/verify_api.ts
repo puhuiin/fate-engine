@@ -644,6 +644,43 @@ check(
 );
 noTpDb.close();
 
+// ---------- 16. 档案部分更新：未传字段不被默认值覆盖，null 可置空 ----------
+const updArc = await call('POST', '/api/v1/archives', {
+  token: tokenA,
+  body: {
+    gender: 'male',
+    solarDate: '2001-05-20',
+    solarTime: '08:30',
+    timePrecision: 'fuzzy',
+    sourceReliability: 'family',
+  },
+});
+const updId = (updArc.json.data as { id: number }).id;
+const updPatch = await call('PATCH', `/api/v1/archives/${updId}`, {
+  token: tokenA,
+  body: { note: '仅改备注' },
+});
+const updAfter = await call('GET', `/api/v1/archives/${updId}`, { token: tokenA });
+const updData = updAfter.json.data as Record<string, unknown>;
+check('PATCH 部分更新成功（仅改 note）', updPatch.status === 200 && updData.note === '仅改备注');
+check('PATCH 未传字段不被覆盖（time_precision 保持 fuzzy）', updData.time_precision === 'fuzzy');
+check('PATCH 未传字段不被覆盖（source_reliability 保持 family）', updData.source_reliability === 'family');
+const updSolar = await call('GET', '/api/v1/archives/:id', { token: tokenA }).then(() =>
+  call('GET', `/api/v1/archives/${updId}`, { token: tokenA }),
+);
+check('PATCH 未传字段不被覆盖（solar_time 保持 08:30）', (updSolar.json.data as { solar_time: string }).solar_time === '08:30');
+
+// null 显式置空时间字段
+const nullPatch = await call('PATCH', `/api/v1/archives/${updId}`, {
+  token: tokenA,
+  body: { solarTime: null },
+});
+const nullAfter = await call('GET', `/api/v1/archives/${updId}`, { token: tokenA });
+check(
+  'PATCH null 置空时间字段',
+  nullPatch.status === 200 && (nullAfter.json.data as { solar_time?: string | null }).solar_time === null,
+);
+
 db.close();
 
 if (failed > 0) {

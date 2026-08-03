@@ -35,21 +35,22 @@ export const guestSchema = z.object({
 });
 
 export const archiveCreateSchema = z.object({
-  gender: z.enum(['male', 'female', 'other']).optional(),
+  gender: z.enum(['male', 'female', 'other']).nullable().optional(),
   solarDate: z.string().refine(isRealDate, '日期不存在，应为有效公历日期（YYYY-MM-DD）'),
   solarTime: z
     .string()
     .regex(/^\d{1,2}:\d{2}(:\d{2})?$/, '时间格式应为 HH:mm')
     .refine(isRealTime, '时间不存在，小时 0-23、分钟/秒 0-59')
+    .nullable()
     .optional(),
   timePrecision: z.enum(['minute', 'hour', 'day', 'fuzzy']).default('minute'),
   sourceReliability: z.enum(['certificate', 'family', 'estimate', 'unknown']).default('unknown'),
-  cityName: z.string().max(40).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-  latitude: z.number().min(-90).max(90).optional(),
-  timezoneOffset: z.number().min(-12).max(14).optional(),
-  timeSource: z.string().max(50).optional(),
-  note: z.string().max(200).optional(),
+  cityName: z.string().max(40).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  timezoneOffset: z.number().min(-12).max(14).nullable().optional(),
+  timeSource: z.string().max(50).nullable().optional(),
+  note: z.string().max(200).nullable().optional(),
 });
 
 /** 档案编辑：全部字段可选，字段级 refine（真实日期/时间）在 partial 后仍保留 */
