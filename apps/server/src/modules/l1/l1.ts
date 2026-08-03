@@ -130,8 +130,10 @@ export function runL1(input: L1Input): L1Output {
   const boundaryRisk = isJieQiBoundaryDay(timeCorrection.trueSolarClockTime) || timeCorrection.crossDay;
 
   // 6. 误差评级
+  // 时间未知时引擎仅能按正午 12:00 占位推定，实际精度至多到日——
+  // 强制以 day 级参与评级，避免 API 传入 timePrecision='minute' 但无 solarTime 时置信度虚高。
   const rating = rateInput({
-    timePrecision: input.timePrecision,
+    timePrecision: timeKnown ? input.timePrecision : 'day',
     sourceReliability: input.sourceReliability,
     hasCity: Boolean(location),
     nearBoundary: boundaryRisk,

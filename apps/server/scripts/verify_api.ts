@@ -679,6 +679,38 @@ check(
   nullPatch.status === 200 && (nullAfter.json.data as { solar_time?: string | null }).solar_time === null,
 );
 
+// ---------- 17. 无时间档案：置信度强制降级，不虚高 ----------
+// API 直接传 timePrecision='minute' 但不带 solarTime 时，引擎按正午 12:00 占位推定，
+// 置信度必须按 day 级评级（不得给出分钟级的精确假象）。
+const noTimeArc = await call('POST', '/api/v1/archives', {
+  token: tokenA,
+  body: {
+    gender: 'male',
+    solarDate: '2003-03-15',
+    timePrecision: 'minute',
+    sourceReliability: 'certificate',
+  },
+});
+const noTimeArcId = (noTimeArc.json.data as { id: number }).id;
+const noTimeCalc = await call('POST', '/api/v1/calculate', {
+  token: tokenA,
+  body: { archiveId: noTimeArcId },
+});
+const noTimeL1 = (
+  (noTimeCalc.json.data?.report as Array<{ layer: number; data: unknown }> | null)?.find(
+    (x) => x.layer === 1,
+  )?.data ?? {}
+) as Record<string, unknown>;
+const noTimeNormalized = (noTimeL1.normalized ?? {}) as Record<string, unknown>;
+const noTimeRating = (noTimeL1.rating ?? { confidence: 0 }) as { confidence: number };
+check('无时间档案测算成功', noTimeCalc.status === 200);
+check('无时间档案 timeKnown=false', noTimeNormalized.timeKnown === false);
+check('无时间档案时间标注为占位', String(noTimeNormalized.solarTime).includes('时间未知'));
+check(
+  '无时间档案置信度按日级降级（<60，拒绝 100 分钟级假象）',
+  typeof noTimeRating.confidence === 'number' && noTimeRating.confidence < 60,
+);
+
 db.close();
 
 if (failed > 0) {
