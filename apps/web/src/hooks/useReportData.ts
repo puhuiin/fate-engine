@@ -93,8 +93,10 @@ export function useReportData(recordId: number) {
     setUnlockError('');
     try {
       const o = await createUnlockOrder(recordId);
+      if (o.code !== 200) throw new Error(o.msg || '创建解锁订单失败，请稍后重试');
       if (!o.data.alreadyUnlocked) {
-        await payOrder(o.data.order.id, 'mock');
+        const pay = await payOrder(o.data.order.id, 'mock');
+        if (pay.code !== 200) throw new Error(pay.msg || '支付失败，请稍后重试');
       }
       await reload();
       await refreshPlansRisks();
@@ -124,6 +126,7 @@ export function useReportData(recordId: number) {
       setReCalcId(archiveId);
       try {
         const res = await calculate(archiveId, calcType);
+        if (res.code !== 200) throw new Error(res.msg || '重新测算失败，请稍后重试');
         onNavigate(res.data.recordId);
       } catch (e) {
         setLoadError(e instanceof Error ? e.message : '重新测算失败，请稍后重试');
