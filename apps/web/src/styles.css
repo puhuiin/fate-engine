@@ -1021,3 +1021,85 @@ table.kv td.renwei {
     break-inside: avoid;
   }
 }
+
+/* ============ 白话解读 ============ */
+
+.term-plain {
+  border-bottom: 1px dotted #b8860b;
+  cursor: help;
+  text-decoration: none;
+}
+
+.plain-glossary {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px dashed #d9c9a0;
+}
+
+.plain-glossary summary {
+  cursor: pointer;
+  color: #8a6d1f;
+  font-size: 13px;
+  user-select: none;
+}
+
+.plain-glossary .plain-table {
+  margin-top: 8px;
+}
+
+.exec-summary {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fffaf0, #fdf3da);
+  border: 1px solid #ecd9a6;
+}
+
+.exec-summary h3 {
+  margin: 0 0 4px;
+}
+
+.plain-points {
+  list-style: none;
+  margin: 12px 0 4px;
+  padding: 0;
+}
+
+.plain-points li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px dashed #e8dcc0;
+}
+
+.plain-points li:last-child {
+  border-bottom: none;
+}
+
+.point-tag {
+  flex: none;
+  min-width: 34px;
+  text-align: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #b8860b;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.plain-points strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.plain-points p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.plain-disclaimer {
+  margin-top: 8px;
+  font-size: 12px;
+}

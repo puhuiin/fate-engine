@@ -21,6 +21,7 @@ import {
 } from '../api/client';
 import { LAYER_NAMES, MODULE_HINT } from '../layers';
 import { buildExportText, Layer1, Layer2, Layer3, Layer4, Layer5, Layer6, Layer7, Layer8, Layer9 } from './report/layers';
+import { buildPlainGuide, type PlainPoint } from './report/plain';
 
 export default function Report() {
   const { id } = useParams();
@@ -147,8 +148,26 @@ export default function Report() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const fmtHour = (h: number): string => {
+    const total = Math.round(h * 60);
+    const hh = Math.floor(total / 60) % 24;
+    const mm = total % 60;
+    return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  };
+
+  const unlocked = paidStatus === 1;
+  const plainGuide: PlainPoint[] = buildPlainGuide({
+    trueSolar: l1 ? fmtHour(l1.timeCorrection.trueSolarHours) : undefined,
+    personality: l3?.personality,
+    strengths: l3?.strengths,
+    growth: l3?.growth,
+    mainKnot: unlocked ? l5?.mainKnot : undefined,
+    synthesis: unlocked ? l7?.synthesis : undefined,
+    essence: unlocked ? l9?.essence : undefined,
+    risk: unlocked && risks.length > 0 ? `${risks[0].trigger_condition}（应对：${risks[0].mitigation}）` : undefined,
+  });
+
   const exportText = async () => {
-    const unlocked = paidStatus === 1;
     const text = buildExportText({
       l1,
       l2,
@@ -199,6 +218,28 @@ export default function Report() {
               {unlocking ? '支付处理中…' : '立即解锁'}
             </button>
           </div>
+        )}
+
+        {plainGuide.length > 0 && (
+          <section className="exec-summary">
+            <h3>先看这里：三分钟读懂报告</h3>
+            <p className="hint">下面把结论翻译成大白话，详细内容在对应分层里。</p>
+            <ul className="plain-points">
+              {plainGuide.map((pt, i) => (
+                <li key={i}>
+                  <span className="point-tag">{pt.tag}</span>
+                  <div>
+                    <strong>{pt.title}</strong>
+                    <p>{pt.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {!unlocked && (
+              <p className="dim">解锁深度报告后，这里会补充「卡点 / 综合结论 / 核心要义」等关键结论。</p>
+            )}
+            <p className="dim plain-disclaimer">以上为启发式文化解读，仅供自我观察参考，不作任何决策依据。</p>
+          </section>
         )}
 
         <nav className="layer-nav">

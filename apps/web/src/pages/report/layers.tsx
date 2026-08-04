@@ -1,5 +1,6 @@
 import type { L1Result, L2Result, L3Result, L4Result, L5Result, L6Result, L7Result, L8Result, L9Result } from '../../api/client';
 import type { PlanItem, RiskItem } from '../../api/client';
+import { GLOSSARY_L1, GLOSSARY_L2, buildPlainGuide, PlainGlossary, TermPlain } from './plain';
 
 function fmtHour(h: number): string {
   const total = Math.round(h * 60);
@@ -25,6 +26,23 @@ export function buildExportText(
 ): string {
   const lines: string[] = [];
   lines.push('全域超验 · 命运演算 报告', '='.repeat(30));
+
+  const guide = buildPlainGuide({
+    trueSolar: r.l1 ? fmtHour(r.l1.timeCorrection.trueSolarHours) : undefined,
+    personality: r.l3?.personality,
+    strengths: r.l3?.strengths,
+    growth: r.l3?.growth,
+    mainKnot: r.l5?.mainKnot,
+    synthesis: r.l7?.synthesis,
+    essence: r.l9?.essence,
+    risk:
+      r.risks.length > 0 ? `${r.risks[0].trigger_condition}（应对：${r.risks[0].mitigation}）` : undefined,
+  });
+  if (guide.length > 0) {
+    lines.push('【先看这里：三分钟读懂报告】');
+    for (const pt of guide) lines.push(`- 【${pt.tag}】${pt.title}：${pt.text}`);
+    lines.push('', '以上为启发式文化解读，仅供自我观察参考，不作任何决策依据。', '');
+  }
 
   if (r.l1) {
     const t = r.l1.timeCorrection;
@@ -114,12 +132,16 @@ export function Layer1({ l1 }: { l1: L1Result }) {
               </td>
             </tr>
             <tr>
-              <td>真太阳时</td>
+              <td>
+                <TermPlain term="真太阳时" plain="按出生地经度修正后的真实天文时间" />
+              </td>
               <td>
                 <strong>{fmtHour(t.trueSolarHours)}</strong>
                 <span className="dim">
                   {' '}
-                  （平太阳时 {fmtHour(t.meanSolarHours)} · 均时差{' '}
+                  （
+                  <TermPlain term="平太阳时" plain="不修正经度、直接用标准时区的钟表时间" /> {fmtHour(t.meanSolarHours)} ·{' '}
+                  <TermPlain term="均时差" plain="地球公转轨道不圆导致的日常钟表偏差" />{' '}
                   {t.equationOfTimeMinutes.toFixed(1)} 分钟 · 总校正{' '}
                   {(t.totalOffsetMinutes ?? t.offsetMinutes) > 0 ? '+' : ''}
                   {t.totalOffsetMinutes ?? t.offsetMinutes} 分钟）
@@ -127,7 +149,9 @@ export function Layer1({ l1 }: { l1: L1Result }) {
               </td>
             </tr>
             <tr>
-              <td>十二时辰</td>
+              <td>
+                <TermPlain term="十二时辰" plain="古代把一天分成 12 段，每段约 2 小时" />
+              </td>
               <td>
                 {l1.shichen.name}（{l1.shichen.branch}时）
                 {t.crossDay && <span className="warn"> · 跨日边界，日柱归属需多版本比对</span>}
@@ -155,7 +179,9 @@ export function Layer1({ l1 }: { l1: L1Result }) {
               <td>{l1.lunar.lunarDate}</td>
             </tr>
             <tr>
-              <td>四柱</td>
+              <td>
+                <TermPlain term="四柱" plain="年、月、日、时四组干支坐标" />
+              </td>
               <td>
                 年 {l1.lunar.yearGanZhi} · 月 {l1.lunar.monthGanZhi} · 日 {l1.lunar.dayGanZhi} ·
                 时 {l1.lunar.timeGanZhi}
@@ -190,6 +216,8 @@ export function Layer1({ l1 }: { l1: L1Result }) {
           )}
         </div>
       </section>
+
+      <PlainGlossary items={GLOSSARY_L1} />
     </div>
   );
 }
@@ -231,10 +259,17 @@ export function Layer2({ l2 }: { l2: L2Result }) {
               <th>干支</th>
               <th>五行</th>
               <th>纳音</th>
-              <th>十神(干)</th>
+              <th>
+                <TermPlain term="十神" plain="与日主的关系称谓，描述性格角色" />
+                (干)
+              </th>
               <th>十神(支)</th>
-              <th>藏干</th>
-              <th>长生</th>
+              <th>
+                <TermPlain term="藏干" plain="地支里「藏着」的五行" />
+              </th>
+              <th>
+                <TermPlain term="长生" plain="五行生长到消亡的状态比喻" />
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -261,13 +296,18 @@ export function Layer2({ l2 }: { l2: L2Result }) {
         <table className="kv">
           <tbody>
             <tr>
-              <td>日主</td>
+              <td>
+                <TermPlain term="日主" plain="代表「你自己」的中心" />
+              </td>
               <td>
                 {bazi.dayMaster.gan}（{bazi.dayMaster.wuxing}） · 旺衰 {bazi.strength}
               </td>
             </tr>
             <tr>
-              <td>五行分布</td>
+              <td>
+                <TermPlain term="五行" plain="金木水火土的文化隐喻" />
+                分布
+              </td>
               <td>
                 {Object.entries(bazi.wuxingCount)
                   .map(([wx, n]) => `${wx}${n}`)
@@ -279,13 +319,17 @@ export function Layer2({ l2 }: { l2: L2Result }) {
               <td>{bazi.shishenStats.map((s) => `${s.name}×${s.count}`).join(' · ')}</td>
             </tr>
             <tr>
-              <td>旬空</td>
+              <td>
+                <TermPlain term="旬空" plain="六旬中轮空的两个地支标记，民间择日用" />
+              </td>
               <td>
                 {bazi.xunKong.xun}旬 · 空{bazi.xunKong.kong}
               </td>
             </tr>
             <tr>
-              <td>胎元 / 命宫</td>
+              <td>
+                <TermPlain term="胎元 / 命宫" plain="传统推演的辅助坐标" />
+              </td>
               <td>
                 {bazi.taiYuan} / {bazi.mingGong}
               </td>
@@ -293,7 +337,10 @@ export function Layer2({ l2 }: { l2: L2Result }) {
           </tbody>
         </table>
         <div>
-          <p className="sub-title">大运走势（前 5 步）</p>
+          <p className="sub-title">
+            <TermPlain term="大运" plain="传统认为约每 10 年进入一个新阶段，仅作节奏参考" />
+            走势（前 5 步）
+          </p>
           <div className="dayun-list">
             {bazi.daYun.map((d) => (
               <span key={d.index} className={`dayun-item ${d.index === bazi.currentDaYun?.index ? 'active' : ''}`}>
@@ -343,6 +390,8 @@ export function Layer2({ l2 }: { l2: L2Result }) {
           <p className="dim">冲突项将由 L7 元规则内核统一，不在此层直接下结论。</p>
         </section>
       )}
+
+      <PlainGlossary items={GLOSSARY_L2} />
     </div>
   );
 }
