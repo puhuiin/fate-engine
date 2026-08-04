@@ -110,6 +110,10 @@ export function buildExportText(r: ExportInput): string {
       lines.push(
         `分叉点 ${bp.year}：A=${bp.decisionA}→${bp.pathA} / B=${bp.decisionB}→${bp.pathB}`,
       );
+    if (r.l6.depthWindows && r.l6.depthWindows.length > 0) {
+      lines.push('各线行运窗口（深度模式）：');
+      for (const w of r.l6.depthWindows) lines.push(`- ${w.line}：${w.windows.join(' → ')}`);
+    }
     lines.push('', r.l6.note, '');
   }
   if (r.risks.length > 0) {

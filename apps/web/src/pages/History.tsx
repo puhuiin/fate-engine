@@ -36,7 +36,7 @@ export default function History() {
   const [stats, setStats] = useState<StatsOverview | null>(null);
   const [orders, setOrders] = useState<OrderRecord[]>([]);
 
-  const load = async (targetPage: number) => {
+  const load = async (targetPage: number, isLoadMore = false) => {
     setLoadError('');
     const [rec, arc, user, st, od] = await Promise.allSettled([
       listRecords(targetPage, PAGE_SIZE),
@@ -45,18 +45,19 @@ export default function History() {
       getStatsOverview(),
       listOrders(),
     ]);
-    if (rec.status === 'fulfilled') {
-      const d = rec.value.data as unknown as { list?: RecordRow[]; total?: number };
+    if (rec.status === 'fulfilled' && rec.value.code === 200) {
+      const d = (rec.value.data ?? {}) as { list?: RecordRow[]; total?: number };
       setRecords((prev) => (targetPage === 1 ? (d.list ?? []) : [...prev, ...(d.list ?? [])]));
       setTotal(d.total ?? 0);
       setPage(targetPage);
     }
-    if (arc.status === 'fulfilled') setArchives(arc.value.data as Archive[]);
-    if (user.status === 'fulfilled') setMe(user.value.data);
-    if (st.status === 'fulfilled') setStats(st.value.data);
-    if (od.status === 'fulfilled') setOrders(od.value.data);
-    if (rec.status === 'rejected' && arc.status === 'rejected') {
-      setLoadError('数据加载失败，请检查网络后重试');
+    if (arc.status === 'fulfilled' && arc.value.code === 200) setArchives(arc.value.data ?? []);
+    if (user.status === 'fulfilled' && user.value.code === 200) setMe(user.value.data);
+    if (st.status === 'fulfilled' && st.value.code === 200) setStats(st.value.data);
+    if (od.status === 'fulfilled' && od.value.code === 200) setOrders(od.value.data ?? []);
+    if (rec.status === 'rejected' || (rec.status === 'fulfilled' && rec.value.code !== 200)) {
+      if (isLoadMore) window.alert('加载更多失败，请稍后重试');
+      else setLoadError('数据加载失败，请检查网络后重试');
     }
     setLoading(false);
   };
@@ -68,18 +69,16 @@ export default function History() {
   const loadMore = async () => {
     if (loadingMore || records.length >= total) return;
     setLoadingMore(true);
-    try {
-      await load(page + 1);
-    } catch {
-      setLoadError('加载更多失败，请稍后重试');
-    } finally {
-      setLoadingMore(false);
-    }
+    await load(page + 1, true);
+    setLoadingMore(false);
   };
 
   const ensureGuest = async () => {
     if (!localStorage.getItem('fate_token')) {
       const guest = await guestLogin();
+      if (guest.code !== 200) {
+        throw new Error(guest.msg || '游客登录失败，请重试');
+      }
       setToken(guest.data.token);
     }
   };
@@ -88,9 +87,13 @@ export default function History() {
     try {
       await ensureGuest();
       const calc = await calculate(archiveId, 'standard');
+      if (calc.code !== 200) {
+        window.alert(calc.msg || '测算失败，请重试');
+        return;
+      }
       navigate('/loading', { state: { recordId: calc.data.recordId } });
-    } catch {
-      window.alert('测算失败，请重试');
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : '测算失败，请重试');
     }
   };
 

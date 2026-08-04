@@ -79,6 +79,7 @@ export default function Input() {
     getArchive(editId)
       .then((res) => {
         if (!alive) return;
+        if (res.code !== 200) throw new Error(res.msg || '档案不存在或无权访问');
         const a = res.data;
         setSolarDate(a.solar_date);
         setSolarTime(a.solar_time ? a.solar_time.slice(0, 5) : '');
@@ -95,7 +96,7 @@ export default function Input() {
           });
         }
       })
-      .catch(() => setError('加载档案失败，请返回重试'))
+      .catch((e) => setError(e instanceof Error ? e.message : '加载档案失败，请返回重试'))
       .finally(() => alive && setEditing(false));
     return () => {
       alive = false;
@@ -138,6 +139,9 @@ export default function Input() {
     try {
       if (!localStorage.getItem('fate_token')) {
         const guest = await guestLogin();
+        if (guest.code !== 200) {
+          throw new Error(guest.msg || '游客登录失败，请重试');
+        }
         setToken(guest.data.token);
       }
       const payload = {
@@ -150,8 +154,16 @@ export default function Input() {
         longitude: city?.longitude,
         latitude: city?.latitude,
       };
-      const archive = editId ? await updateArchive(editId, payload) : await createArchive(payload);
-      const calc = await calculate(archive.data.id, calcType);
+      const res = editId ? await updateArchive(editId, payload) : await createArchive(payload);
+      if (res.code !== 200) {
+        setError(res.msg || '保存档案失败，请重试');
+        return;
+      }
+      const calc = await calculate(res.data.id, calcType);
+      if (calc.code !== 200) {
+        setError(calc.msg || '测算失败，请重试');
+        return;
+      }
       navigate('/loading', { state: { recordId: calc.data.recordId } });
     } catch (e) {
       setError(e instanceof Error ? e.message : '测算失败，请重试');

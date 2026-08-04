@@ -42,7 +42,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 5 组确定性回归脚本（44 + 8 + 15 + 47 + 114 = 228 断言） |
+| 校验 | 5 组确定性回归脚本（44 + 8 + 15 + 47 + 124 = 238 断言） |
 
 ---
 
@@ -89,14 +89,14 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（228 断言）
+# 全量回归（238 断言）
 npm run verify -w @fate/server
 
 # 分块验证
 npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时边界（8 用例）
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆（15 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（47 断言，含深度模式差异）
-npm run verify:api -w @fate/server  # 接口层（120 断言，内存 SQLite + inject）
+npm run verify:api -w @fate/server  # 接口层（124 断言，内存 SQLite + inject）
 
 # 前端单元测试（纯函数层：白话导读 / 精度映射）
 npm run test -w @fate/web
