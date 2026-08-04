@@ -75,6 +75,26 @@ export const orderCreateSchema = z.object({
   recordId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
 });
 
+/** 数值参数容错 clamp：非有限数降级为 fallback，有限数截断到 [min, max] 并取整（与既有 API 容错语义一致） */
+function clampParam(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(n)));
+}
+
+/** 测算记录列表查询：分页（容错 clamp）+ 深度模式筛选（可选） */
+export const recordsQuerySchema = z.object({
+  page: z
+    .union([z.number(), z.string()])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : clampParam(v, 1, 100000, 1))),
+  pageSize: z
+    .union([z.number(), z.string()])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : clampParam(v, 1, 50, 10))),
+  calcType: z.enum(['standard', 'quantum', 'ultimate']).optional(),
+});
+
 /** 支付订单 */
 export const orderPaySchema = z.object({
   channel: z.enum(['mock', 'wechat', 'alipay']).default('mock'),

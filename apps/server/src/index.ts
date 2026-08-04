@@ -1,5 +1,7 @@
 import { createDb } from './db/client.js';
 import { buildApp } from './app.js';
+import { createRepos } from './db/repo/index.js';
+import { startOrderExpiryTask } from './jobs/expireOrders.js';
 import { config } from './config.js';
 
 const PORT = config.port;
@@ -20,6 +22,9 @@ if (!process.env.FATE_SECRET) {
 const db = createDb();
 const app = buildApp(db);
 
+/** 后台定时任务：待支付订单过期清理（不阻塞进程退出） */
+const stopOrderExpiry = startOrderExpiryTask(createRepos(db));
+
 try {
   await app.listen({ port: PORT, host: HOST });
   console.log(`fate-engine server listening on http://${HOST}:${PORT}`);
@@ -37,6 +42,7 @@ async function shutdown(signal: string): Promise<void> {
   }, 5000);
   force.unref();
   try {
+    stopOrderExpiry();
     await app.close();
   } catch (err) {
     app.log.error(err);

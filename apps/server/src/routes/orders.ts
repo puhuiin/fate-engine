@@ -126,6 +126,32 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
     );
   });
 
+  /**
+   * 取消待支付订单：用户主动放弃本次解锁。
+   * 已支付（granted）/已过期（expired）不可取消，返回明确语义。
+   */
+  app.post('/api/v1/orders/:id/cancel', { preHandler: app.authenticate }, async (req, reply) => {
+    const id = requireIdParam(req, 'id');
+    const order = repos.orders.findByIdAndUser<
+      Record<string, unknown> & {
+        id: number;
+        entitlement_status: string;
+      }
+    >(id, req.userId);
+    if (!order) {
+      throw new ApiError(404, '订单不存在或无权访问');
+    }
+    if (order.entitlement_status === 'granted') {
+      throw new ApiError(400, '订单已支付，无法取消');
+    }
+    if (order.entitlement_status === 'expired') {
+      throw new ApiError(410, '订单已过期');
+    }
+    repos.orders.markExpired(order.id);
+    const updated = repos.orders.findById(order.id);
+    return reply.send(ok(orderPublic(updated as OrderRow), '订单已取消'));
+  });
+
   /** 查询某记录解锁状态与最新订单 */
   app.get(
     '/api/v1/orders/status/:recordId',

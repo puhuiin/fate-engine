@@ -27,28 +27,30 @@ export function createRecordRepo(db: Db) {
         .get(userId) as { n: number };
       return Number(row.n);
     },
-    listByUser(userId: number, page: number, pageSize: number) {
+    listByUser(userId: number, page: number, pageSize: number, calcType?: string) {
+      const where = `WHERE r.user_id = ?${calcType ? ' AND r.calc_type = ?' : ''}`;
       const base =
         'FROM calculate_record r JOIN user_birth_archive a ON r.archive_id = a.id AND a.user_id = r.user_id' +
-        ' WHERE r.user_id = ?';
+        ` ${where}`;
       const cols = `r.id, r.archive_id, r.calc_type, r.status, r.paid_status, r.created_at,
                     a.solar_date, a.solar_time, a.city_name`;
+      const params = calcType ? [userId, calcType] : [userId];
       const rows = db
         .prepare(`SELECT ${cols} ${base} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`)
-        .all(userId, pageSize, (page - 1) * pageSize) as Record<string, unknown>[];
-      const total = db.prepare(`SELECT COUNT(*) AS n ${base}`).get(userId) as { n: number };
+        .all(...params, pageSize, (page - 1) * pageSize) as Record<string, unknown>[];
+      const total = db.prepare(`SELECT COUNT(*) AS n ${base}`).get(...params) as { n: number };
       return { rows, total: Number(total.n) };
     },
-    listAllByUser(userId: number) {
+    listAllByUser(userId: number, calcType?: string) {
+      const where = `WHERE r.user_id = ?${calcType ? ' AND r.calc_type = ?' : ''}`;
       const base =
         'FROM calculate_record r JOIN user_birth_archive a ON r.archive_id = a.id AND a.user_id = r.user_id' +
-        ' WHERE r.user_id = ?';
+        ` ${where}`;
       const cols = `r.id, r.archive_id, r.calc_type, r.status, r.paid_status, r.created_at,
                     a.solar_date, a.solar_time, a.city_name`;
-      return db.prepare(`SELECT ${cols} ${base} ORDER BY r.created_at DESC`).all(userId) as Record<
-        string,
-        unknown
-      >[];
+      return db
+        .prepare(`SELECT ${cols} ${base} ORDER BY r.created_at DESC`)
+        .all(...(calcType ? [userId, calcType] : [userId])) as Record<string, unknown>[];
     },
     markPaid(recordId: number): void {
       db.prepare('UPDATE calculate_record SET paid_status = 1 WHERE id = ?').run(recordId);

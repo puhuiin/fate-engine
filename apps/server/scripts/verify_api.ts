@@ -5,6 +5,8 @@
  */
 import { createDb } from '../src/db/client.js';
 import { buildApp } from '../src/app.js';
+import { createRepos } from '../src/db/repo/index.js';
+import { startOrderExpiryTask } from '../src/jobs/expireOrders.js';
 import type { FastifyInstance } from 'fastify';
 
 const db = createDb(':memory:');
@@ -946,6 +948,71 @@ const meAfter = await call('GET', '/api/v1/auth/me', { token: tokenA });
 check('修改昵称持久化（me 接口可见）', meAfter.json.data?.nickname === '新昵称甲');
 const statsAnon = await call('GET', '/api/v1/stats/overview');
 check('统计看板未登录 401', statsAnon.status === 401 && statsAnon.json.code === 401);
+
+// ---------- 13. 取消订单 + 深度模式筛选 + 订单过期批量清理 ----------
+const cancelArc = await call('POST', '/api/v1/archives', {
+  token: tokenA,
+  body: { gender: 'female', solarDate: '2002-11-29', solarTime: '20:40' },
+});
+const cancelArchive = cancelArc.json.data?.id as number;
+const quantumCalc = await call('POST', '/api/v1/calculate', {
+  token: tokenA,
+  body: { archiveId: cancelArchive, calcType: 'quantum' },
+});
+const quantumRecord = quantumCalc.json.data?.recordId as number;
+const cancelOrder = await call('POST', '/api/v1/orders', {
+  token: tokenA,
+  body: { recordId: quantumRecord },
+});
+const cancelOrderId = cancelOrder.json.data?.order?.id as number;
+check('创建可取消订单成功', cancelOrder.status === 200 && Number.isInteger(cancelOrderId));
+const cancelRes = await call('POST', `/api/v1/orders/${cancelOrderId}/cancel`, { token: tokenA });
+check(
+  '取消待支付订单成功且状态为 expired',
+  cancelRes.status === 200 && cancelRes.json.data?.entitlement_status === 'expired',
+);
+const cancelAgain = await call('POST', `/api/v1/orders/${cancelOrderId}/cancel`, { token: tokenA });
+check('重复取消已取消订单 410', cancelAgain.status === 410 && cancelAgain.json.code === 410);
+const paidOrd = await call('POST', '/api/v1/orders', {
+  token: tokenA,
+  body: { recordId: quantumRecord },
+});
+const paidOrdId = paidOrd.json.data?.order?.id as number;
+await call('POST', `/api/v1/orders/${paidOrdId}/pay`, { token: tokenA, body: { channel: 'mock' } });
+const cancelGranted = await call('POST', `/api/v1/orders/${paidOrdId}/cancel`, { token: tokenA });
+check('已支付订单取消被拒绝 400', cancelGranted.status === 400 && cancelGranted.json.code === 400);
+
+const filterRec = await call('GET', `/api/v1/records?calcType=quantum&page=1&pageSize=5`, {
+  token: tokenA,
+});
+const filterList = (filterRec.json.data?.list ?? []) as Array<{ calc_type: string }>;
+check(
+  '记录列表按 calcType=quantum 筛选且计数正确',
+  filterRec.status === 200 &&
+    filterRec.json.data?.calcType === 'quantum' &&
+    filterList.length > 0 &&
+    filterList.every((r) => r.calc_type === 'quantum'),
+);
+const filterBadType = await call('GET', '/api/v1/records?calcType=quantum-extra', {
+  token: tokenA,
+});
+check('非法 calcType 筛选 400', filterBadType.status === 400 && filterBadType.json.code === 400);
+
+const zombie = await call('POST', '/api/v1/orders', {
+  token: tokenA,
+  body: { recordId: quantumRecord },
+});
+const zombieId = zombie.json.data?.order?.id as number;
+db.prepare(`UPDATE order_pay SET created_at = datetime('now', '-2 hours') WHERE id = ?`).run(
+  zombieId,
+);
+const repos = createRepos(db);
+const stopExpiry = startOrderExpiryTask(repos, 60_000);
+stopExpiry();
+const zombieAfter = db
+  .prepare('SELECT entitlement_status FROM order_pay WHERE id = ?')
+  .get(zombieId) as { entitlement_status: string };
+check('订单过期批量清理任务作废旧单', zombieAfter.entitlement_status === 'expired');
 
 db.close();
 

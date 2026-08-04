@@ -19,6 +19,7 @@ import { fail, ok } from './lib/util.js';
 import { authenticate } from './lib/auth.js';
 import { createRateLimitHook } from './lib/rateLimit.js';
 import { searchCities } from './modules/l1/location.js';
+import { LAYER_META } from './report.js';
 
 export interface BuildAppOpts {
   logger?: boolean;
@@ -223,7 +224,7 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       version: '0.1.0',
       env: config.env,
       uptimeSeconds: Math.round(process.uptime()),
-      layers: 'L1-L9 full',
+      layers: LAYER_META.map((l) => ({ layer: l.layer, version: l.version })),
       pid: process.pid,
       memoryMB: Math.round(mem.rss / 1024 / 1024),
       dbSizeMB: Math.round(dbSizeBytes / 1024 / 1024),

@@ -7,6 +7,16 @@ export function createOrderRepo(db: Db) {
     new Date(Date.now() - offsetMs).toISOString().replace('T', ' ').slice(0, 19);
 
   return {
+    /** 全局批量作废所有超过有效期的待支付订单（定时任务调用，防僵尸订单长期滞留） */
+    expireAllPending(ttlMs: number): number {
+      const info = db
+        .prepare(
+          `UPDATE order_pay SET entitlement_status = 'expired'
+           WHERE entitlement_status = 'pending' AND created_at <= ?`,
+        )
+        .run(utcNowString(ttlMs));
+      return Number(info.changes);
+    },
     /** 将超时未支付的订单置为 expired（防僵尸订单堆积） */
     expirePendingByRecord(recordId: number, userId: number, ttlMs: number): void {
       db.prepare(

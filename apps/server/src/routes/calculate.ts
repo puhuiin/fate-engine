@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ok } from '../lib/util.js';
 import { ApiError } from '../lib/errors.js';
 import { assertSchema, requireIdParam } from '../lib/http.js';
-import { calculateSchema } from '../schema.js';
+import { calculateSchema, recordsQuerySchema } from '../schema.js';
 import type { Repos } from '../db/repo/index.js';
 import { runL1 } from '../modules/l1/l1.js';
 import type { TimePrecision, SourceReliability } from '../modules/l1/rating.js';
@@ -158,23 +158,22 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
     return ok({ risks: rows, total: rows.length, locked: false });
   });
 
-  /** 测算历史列表（可选分页：page/pageSize，缺省时返回全部保持兼容） */
+  /** 测算历史列表（可选分页 page/pageSize 与深度模式 calcType 筛选） */
   app.get('/api/v1/records', { preHandler: app.authenticate }, async (req) => {
-    const query = req.query as { page?: string; pageSize?: string };
-    const clampInt = (v: unknown, fallback: number, max: number): number => {
-      const n = Number(v);
-      if (!Number.isFinite(n)) return fallback;
-      return Math.min(max, Math.max(1, Math.floor(n)));
-    };
-    const page = clampInt(query.page, 1, 100000);
-    const pageSize = clampInt(query.pageSize, 10, 50);
-    const paginate = query.page !== undefined || query.pageSize !== undefined;
-    if (!paginate) {
+    const { page, pageSize, calcType } = assertSchema(recordsQuerySchema, req.query ?? {});
+    const currentPage = page ?? 1;
+    const currentSize = pageSize ?? 10;
+    if (page === undefined && pageSize === undefined && calcType === undefined) {
       const rows = repos.records.listAllByUser(req.userId);
       return ok(rows);
     }
-    const { rows, total } = repos.records.listByUser(req.userId, page, pageSize);
-    return ok({ list: rows, total, page, pageSize });
+    const { rows, total } = repos.records.listByUser(
+      req.userId,
+      currentPage,
+      currentSize,
+      calcType,
+    );
+    return ok({ list: rows, total, page: currentPage, pageSize: currentSize, calcType });
   });
 
   /** 删除测算记录（仅本人）：级联清理改运方案、风险项与订单 */
