@@ -1,15 +1,20 @@
 import type { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
+import { config } from '../config.js';
 import { fail, ok, parseId } from '../lib/util.js';
 import type { Db } from '../db/client.js';
 import { requireAuth } from './auth.js';
 import { lockedLayers } from '../report.js';
+import { orderCreateSchema, orderPaySchema } from '../schema.js';
 
 /** 深度报告解锁价格（分）：¥99 */
-const UNLOCK_PRICE_CENTS = 9900;
+const UNLOCK_PRICE_CENTS = config.unlockPriceCents;
 
 /** 支付渠道白名单（mock 为开发模拟渠道） */
-const PAY_CHANNELS = new Set(['mock', 'wechat', 'alipay']);
+const PAY_CHANNELS = new Set(config.payChannels);
+
+/** 待支付订单有效期：默认 30 分钟，超时自动失效（防僵尸订单堆积） */
+const ORDER_TTL_MS = config.orderTtlMs;
 
 interface RecordRow {
   id: number;
@@ -24,14 +29,24 @@ function orderPublic(o: OrderRow): OrderRow {
   return rest;
 }
 
+/**
+ * 待支付订单是否已过期。
+ * created_at 为 SQLite datetime('now') 的 UTC 'YYYY-MM-DD HH:MM:SS' 文本，
+ * 与 JS 计算出的同格式 UTC 字符串可直接按字典序比较（固定宽度 + 同参考系）。
+ */
+function isOrderExpired(createdAt: string): boolean {
+  const expiry = new Date(Date.now() - ORDER_TTL_MS).toISOString().replace('T', ' ').slice(0, 19);
+  return createdAt <= expiry;
+}
+
 export function orderRoutes(app: FastifyInstance, db: Db): void {
   /** 为指定测算记录创建解锁订单（已付费直接返回已解锁） */
   app.post('/api/v1/orders', { preHandler: requireAuth }, async (req, reply) => {
-    const body = (req.body ?? {}) as { recordId?: number };
-    const recordId = parseId(body.recordId);
-    if (!recordId) {
-      return reply.send(fail(400, 'recordId 参数错误'));
+    const parsed = orderCreateSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.send(fail(400, parsed.error.issues[0]?.message ?? 'recordId 参数错误'));
     }
+    const recordId = parsed.data.recordId;
     const record = db
       .prepare('SELECT id, paid_status FROM calculate_record WHERE id = ? AND user_id = ?')
       .get(recordId, req.userId) as RecordRow | undefined;
@@ -43,6 +58,12 @@ export function orderRoutes(app: FastifyInstance, db: Db): void {
     }
 
     const tx = db.transaction((): { existing?: OrderRow; created?: OrderRow } => {
+      // 过期的待支付订单统一作废，避免用户被陈年僵尸订单卡住
+      db.prepare(
+        `UPDATE order_pay SET entitlement_status = 'expired'
+         WHERE record_id = ? AND user_id = ? AND entitlement_status = 'pending'
+           AND created_at <= ?`,
+      ).run(recordId, req.userId, new Date(Date.now() - ORDER_TTL_MS).toISOString().replace('T', ' ').slice(0, 19));
       const pending = db
         .prepare(
           `SELECT * FROM order_pay
@@ -79,8 +100,11 @@ export function orderRoutes(app: FastifyInstance, db: Db): void {
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
     }
-    const body = (req.body ?? {}) as { channel?: string };
-    const channel = String(body.channel ?? 'mock').trim();
+    const parsed = orderPaySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.send(fail(400, 'pay_channel 不合法（mock/wechat/alipay）'));
+    }
+    const channel = parsed.data.channel;
     if (!PAY_CHANNELS.has(channel)) {
       return reply.send(fail(400, 'pay_channel 不合法（mock/wechat/alipay）'));
     }
@@ -90,6 +114,7 @@ export function orderRoutes(app: FastifyInstance, db: Db): void {
       id: number;
       record_id: number | null;
       entitlement_status: string;
+      created_at: string;
     }) | undefined;
     if (!order) {
       return reply.send(fail(404, '订单不存在或无权访问'));
@@ -97,8 +122,18 @@ export function orderRoutes(app: FastifyInstance, db: Db): void {
     if (order.entitlement_status === 'granted') {
       return reply.send(ok({ order: orderPublic(order), paidStatus: 1 }, '订单已支付'));
     }
+    if (order.entitlement_status === 'expired') {
+      return reply.send(fail(410, '订单已过期，请重新下单'));
+    }
     if (!order.record_id) {
       return reply.send(fail(400, '订单未关联测算记录'));
+    }
+    if (isOrderExpired(order.created_at)) {
+      db.prepare(
+        `UPDATE order_pay SET entitlement_status = 'expired'
+         WHERE id = ? AND entitlement_status = 'pending'`,
+      ).run(order.id);
+      return reply.send(fail(410, '订单已过期，请重新下单'));
     }
 
     const rec = db

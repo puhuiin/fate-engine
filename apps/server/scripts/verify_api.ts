@@ -205,7 +205,23 @@ check('订单响应不含内部 user_id', ord1.json.data?.order?.user_id === und
 const ord2 = await call('POST', '/api/v1/orders', { token: tokenA, body: { recordId: record1 } });
 check('重复下单返回同一 pending 订单', ord2.status === 200 && ord2.json.data?.order?.id === orderId);
 
-const pay = await call('POST', `/api/v1/orders/${orderId}/pay`, {
+// 订单过期机制：人为改旧后再次下单应作废旧单并新建；对过期订单支付返回 410
+db.prepare(`UPDATE order_pay SET created_at = datetime('now', '-2 hours') WHERE id = ?`).run(orderId);
+const ord3 = await call('POST', '/api/v1/orders', { token: tokenA, body: { recordId: record1 } });
+const orderId3 = ord3.json.data?.order?.id as number;
+const expiredOld = db
+  .prepare('SELECT entitlement_status FROM order_pay WHERE id = ?')
+  .get(orderId) as { entitlement_status: string };
+check(
+  '订单过期后重新下单自动作废旧单并新建',
+  ord3.status === 200 && orderId3 !== orderId && expiredOld.entitlement_status === 'expired',
+);
+const payExpired = await call('POST', `/api/v1/orders/${orderId}/pay`, {
+  token: tokenA,
+  body: { channel: 'mock' },
+});
+check('对过期订单支付返回 410', payExpired.status === 410 && payExpired.json.code === 410);
+const pay = await call('POST', `/api/v1/orders/${orderId3}/pay`, {
   token: tokenA,
   body: { channel: 'mock' },
 });
@@ -231,13 +247,13 @@ const residRow = db
   .prepare('SELECT entitlement_status FROM order_pay WHERE id = ?')
   .get(residOrderId) as { entitlement_status: string };
 check('残留订单状态被收尾为 granted', residRow.entitlement_status === 'granted');
-const payAgain = await call('POST', `/api/v1/orders/${orderId}/pay`, {
+const payAgain = await call('POST', `/api/v1/orders/${orderId3}/pay`, {
   token: tokenA,
   body: { channel: 'mock' },
 });
 check('已支付订单重复支付返回已支付', payAgain.status === 200 && payAgain.json.data?.paidStatus === 1);
 
-const payBadChannel = await call('POST', `/api/v1/orders/${orderId}/pay`, {
+const payBadChannel = await call('POST', `/api/v1/orders/${orderId3}/pay`, {
   token: tokenA,
   body: { channel: 'crypto' },
 });
@@ -298,7 +314,13 @@ const badStatus = await call('PATCH', `/api/v1/plans/${planId}`, {
   token: tokenA,
   body: { status: 'x' },
 });
-check('打卡非法 status 不更新且语义明确', badStatus.status === 200 && badStatus.json.msg === '未更新任何字段');
+const planStatusAfterBad = (
+  db.prepare('SELECT status FROM luck_plan WHERE id = ?').get(planId) as { status: string }
+).status;
+check(
+  '打卡非法 status 拒绝 400 且状态未被写入',
+  badStatus.status === 400 && badStatus.json.code === 400 && planStatusAfterBad === 'done',
+);
 
 const planStatusBefore = (
   db.prepare('SELECT status FROM luck_plan WHERE id = ?').get(planId) as { status: string }

@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
-
-const SECRET = process.env.FATE_SECRET || 'fate-dev-secret-2026';
+import { config } from '../config.js';
 
 export function md5(s: string): string {
   return crypto.createHash('md5').update(s).digest('hex');
@@ -17,37 +16,34 @@ export interface ApiResp {
 export function ok(data: unknown, msg = '操作成功'): ApiResp {
   const timestamp = Math.floor(Date.now() / 1000);
   const json = JSON.stringify(data ?? {});
-  const sign = md5(`${timestamp}|${json}|${SECRET}`).slice(0, 16);
+  const sign = md5(`${timestamp}|${json}|${config.secret}`).slice(0, 16);
   return { code: 200, msg, data, timestamp, sign };
 }
 
 export function fail(code: number, msg: string): ApiResp {
   const timestamp = Math.floor(Date.now() / 1000);
-  const sign = md5(`${timestamp}||${SECRET}`).slice(0, 16);
+  const sign = md5(`${timestamp}||${config.secret}`).slice(0, 16);
   return { code, msg, data: null, timestamp, sign };
 }
 
-/** 签发 7 天有效 token（HMAC 签名，无需外部依赖） */
+/** 签发 N 秒有效 token（HMAC 签名，无需外部依赖），有效期可经 FATE_TOKEN_TTL_SECONDS 配置 */
 export function signToken(userId: number): string {
-  const payload = `${userId}.${Date.now() + 7 * 24 * 3600 * 1000}`;
+  const payload = `${userId}.${Date.now() + config.tokenTtlSeconds * 1000}`;
   const sig = crypto
-    .createHmac('sha256', SECRET)
+    .createHmac('sha256', config.secret)
     .update(payload)
     .digest('hex')
     .slice(0, 24);
   return `${Buffer.from(payload).toString('base64url')}.${sig}`;
 }
 
-/** token 长度上限：正常签发 token < 200 字符，超限直接拒绝，避免超大 payload 解码放大 */
-const TOKEN_MAX_LENGTH = 1024;
-
 export function verifyToken(token?: string): { userId: number } | null {
-  if (!token || token.length > TOKEN_MAX_LENGTH) return null;
+  if (!token || token.length > config.tokenMaxLength) return null;
   const [b64, sig] = token.split('.');
   if (!b64 || !sig) return null;
   const payload = Buffer.from(b64, 'base64url').toString();
   const expect = crypto
-    .createHmac('sha256', SECRET)
+    .createHmac('sha256', config.secret)
     .update(payload)
     .digest('hex')
     .slice(0, 24);

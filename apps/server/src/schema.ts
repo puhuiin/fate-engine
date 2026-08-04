@@ -60,3 +60,34 @@ export const calculateSchema = z.object({
   archiveId: z.number().int().positive(),
   calcType: z.enum(['standard', 'quantum', 'ultimate']).default('standard'),
 });
+
+/** 创建解锁订单 */
+export const orderCreateSchema = z.object({
+  recordId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
+});
+
+/** 支付订单 */
+export const orderPaySchema = z.object({
+  channel: z.enum(['mock', 'wechat', 'alipay']).default('mock'),
+});
+
+/** 改运计划打卡更新 */
+export const planPatchSchema = z
+  .object({
+    status: z.enum(['done', 'pending']).optional(),
+    note: z.string().trim().max(200).optional(),
+  })
+  .refine((d) => d.status !== undefined || d.note !== undefined, '没有可更新的字段');
+
+/** 内核规则迭代记录 */
+export const kernelLogSchema = z.object({
+  version: z.string().trim().min(1).max(20),
+  ruleName: z.string().trim().min(1).max(50),
+  ruleDetail: z.string().trim().max(500).default(''),
+  note: z.string().trim().max(200).default(''),
+});
+
+/** 内核日志查询 */
+export const kernelQuerySchema = z.object({
+  version: z.string().trim().max(20).optional(),
+});

@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import crypto from 'node:crypto';
 import type { Db } from './db/client.js';
+import { config } from './config.js';
 import { authRoutes } from './routes/auth.js';
 import { archiveRoutes } from './routes/archives.js';
 import { calculateRoutes } from './routes/calculate.js';
@@ -34,14 +35,14 @@ export interface BuildAppOpts {
 }
 
 /** 请求体上限（JSON API 场景 64KB 足够，防超大 body 资源耗尽） */
-const BODY_LIMIT = 64 * 1024;
+const BODY_LIMIT = config.bodyLimit;
 
 /** 全局默认限流：普通接口每 IP 300 次/分钟（RATE_LIMIT_MAX 可覆盖） */
-const GLOBAL_RATE_MAX = Number(process.env.RATE_LIMIT_MAX) || 300;
-const RATE_WINDOW_MS = 60 * 1000;
+const GLOBAL_RATE_MAX = config.globalRateMax;
+const RATE_WINDOW_MS = config.rateWindowMs;
 
 /** 认证/注册接口更严限流：每 IP 20 次/分钟，防验证码爆破与刷注册 */
-const AUTH_RATE_MAX = 20;
+const AUTH_RATE_MAX = config.authRateMax;
 
 function parseCorsOrigins(): string[] | null {
   const raw = process.env.CORS_ORIGIN;
@@ -140,12 +141,23 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     return payload;
   });
 
-  app.get('/api/health', async () => ({
-    ok: true,
-    name: 'fate-engine',
-    phase: 'phase5-payment',
-    layers: 'L1-L9 full',
-  }));
+  app.get('/api/health', async () => {
+    let dbOk = true;
+    try {
+      db.prepare('SELECT 1 AS ok').get();
+    } catch {
+      dbOk = false;
+    }
+    return {
+      ok: dbOk,
+      name: 'fate-engine',
+      version: '0.1.0',
+      env: config.env,
+      uptimeSeconds: Math.round(process.uptime()),
+      layers: 'L1-L9 full',
+      time: new Date().toISOString(),
+    };
+  });
 
   /** L1 城市检索（前端录入页自动补全） */
   app.get('/api/v1/locations/search', async (req) => {

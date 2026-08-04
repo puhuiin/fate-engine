@@ -1,9 +1,9 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { config } from '../config.js';
 
-export const DB_PATH =
-  process.env.DB_PATH || path.resolve(process.cwd(), 'data', 'fate.db');
+export const DB_PATH = config.dbPath;
 
 /** PRD「6. 数据库核心表结构」7 张表 DDL */
 export const DDL = `

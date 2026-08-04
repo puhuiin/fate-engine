@@ -3,6 +3,7 @@ import { fail, ok, parseId } from '../lib/util.js';
 import type { Db } from '../db/client.js';
 import { requireAuth } from './auth.js';
 import { lockedLayers } from '../report.js';
+import { planPatchSchema } from '../schema.js';
 
 interface PlanRow {
   id: number;
@@ -46,7 +47,10 @@ export function planRoutes(app: FastifyInstance, db: Db): void {
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
     }
-    const body = (req.body ?? {}) as { status?: string; note?: string };
+    const parsed = planPatchSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.send(fail(400, parsed.error.issues[0]?.message ?? '没有可更新的字段'));
+    }
     const plan = db
       .prepare(
         `SELECT p.*, r.paid_status FROM luck_plan p
@@ -61,11 +65,7 @@ export function planRoutes(app: FastifyInstance, db: Db): void {
       return reply.send(fail(403, '请先解锁深度报告再执行改运打卡'));
     }
 
-    const note = String(body.note ?? '').trim();
-    if (body.note !== undefined && note.length > 200) {
-      return reply.send(fail(400, '备注长度 ≤200'));
-    }
-    const status = body.status === 'done' ? 'done' : body.status === 'pending' ? 'pending' : null;
+    const { status, note } = parsed.data;
     if (status) {
       db.prepare(
         `UPDATE luck_plan SET status = ?,
@@ -73,14 +73,14 @@ export function planRoutes(app: FastifyInstance, db: Db): void {
          WHERE id = ?`,
       ).run(status, status, id);
     }
-    if (body.note !== undefined && note) {
+    if (note) {
       db.prepare('UPDATE luck_plan SET content = content || char(10) || ? WHERE id = ?').run(
         note,
         id,
       );
     }
     const updated = db.prepare('SELECT * FROM luck_plan WHERE id = ?').get(id);
-    const msg = status ? '打卡状态已更新' : body.note !== undefined ? '备注已更新' : '未更新任何字段';
+    const msg = status ? '打卡状态已更新' : note ? '备注已更新' : '未更新任何字段';
     return ok(updated, msg);
   });
 }

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import crypto from 'node:crypto';
+import { config } from '../config.js';
 import { fail, maskPhone, ok, signToken, verifyToken } from '../lib/util.js';
 import { createRateLimitHook } from '../lib/rateLimit.js';
 import { guestSchema, phoneLoginSchema, sendSmsSchema } from '../schema.js';
@@ -30,7 +31,7 @@ export async function requireAuth(
 }
 
 /** 同一验证码最多允许的错误尝试次数，超过则作废并要求重新获取 */
-const MAX_CODE_ATTEMPTS = 5;
+const MAX_CODE_ATTEMPTS = config.maxCodeAttempts;
 
 /** 用户对外字段白名单：剥离 phone（明文）等内部字段 */
 const USER_PUBLIC_COLS =
