@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
+import { runMigrations } from './migrations.js';
 
 export const DB_PATH = config.dbPath;
 
@@ -121,47 +122,7 @@ export function createDb(dbPath: string = DB_PATH): Db {
   db.pragma('busy_timeout = 5000');
   db.pragma('synchronous = NORMAL');
   db.exec(DDL);
-  migrateColumns(db);
+  runMigrations(db);
   db.prepare("DELETE FROM sms_code WHERE expires_at <= datetime('now')").run();
   return db;
-}
-
-/** 对已存在的旧库做幂等补列（CREATE TABLE IF NOT EXISTS 不会修改旧表） */
-function migrateColumns(db: Db): void {
-  const colsOf = (table: string) =>
-    new Set(
-      (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
-        (c) => c.name,
-      ),
-    );
-
-  const archive = colsOf('user_birth_archive');
-  if (!archive.has('time_precision')) {
-    db.exec(
-      `ALTER TABLE user_birth_archive ADD COLUMN time_precision TEXT NOT NULL DEFAULT 'minute'`,
-    );
-  }
-  if (!archive.has('source_reliability')) {
-    db.exec(
-      `ALTER TABLE user_birth_archive ADD COLUMN source_reliability TEXT NOT NULL DEFAULT 'unknown'`,
-    );
-  }
-
-  const plan = colsOf('luck_plan');
-  if (!plan.has('status')) {
-    db.exec(`ALTER TABLE luck_plan ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`);
-  }
-  if (!plan.has('finished_at')) {
-    db.exec(`ALTER TABLE luck_plan ADD COLUMN finished_at TEXT`);
-  }
-
-  const order = colsOf('order_pay');
-  if (!order.has('record_id')) {
-    db.exec(`ALTER TABLE order_pay ADD COLUMN record_id INTEGER REFERENCES calculate_record(id)`);
-  }
-
-  const sms = colsOf('sms_code');
-  if (!sms.has('fail_count')) {
-    db.exec(`ALTER TABLE sms_code ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0`);
-  }
 }

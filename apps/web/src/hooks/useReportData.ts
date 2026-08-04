@@ -88,24 +88,27 @@ export function useReportData(recordId: number) {
     return res;
   }, [recordId]);
 
-  const unlock = useCallback(async () => {
-    setUnlocking(true);
-    setUnlockError('');
-    try {
-      const o = await createUnlockOrder(recordId);
-      if (o.code !== 200) throw new Error(o.msg || '创建解锁订单失败，请稍后重试');
-      if (!o.data.alreadyUnlocked) {
-        const pay = await payOrder(o.data.order.id, 'mock');
-        if (pay.code !== 200) throw new Error(pay.msg || '支付失败，请稍后重试');
+  const unlock = useCallback(
+    async (channel: string = 'wechat') => {
+      setUnlocking(true);
+      setUnlockError('');
+      try {
+        const o = await createUnlockOrder(recordId);
+        if (o.code !== 200) throw new Error(o.msg || '创建解锁订单失败，请稍后重试');
+        if (!o.data.alreadyUnlocked) {
+          const pay = await payOrder(o.data.order.id, channel);
+          if (pay.code !== 200) throw new Error(pay.msg || '支付失败，请稍后重试');
+        }
+        await reload();
+        await refreshPlansRisks();
+      } catch (e) {
+        setUnlockError(e instanceof Error ? e.message : '解锁失败，请稍后重试');
+      } finally {
+        setUnlocking(false);
       }
-      await reload();
-      await refreshPlansRisks();
-    } catch (e) {
-      setUnlockError(e instanceof Error ? e.message : '解锁失败，请稍后重试');
-    } finally {
-      setUnlocking(false);
-    }
-  }, [recordId, reload, refreshPlansRisks]);
+    },
+    [recordId, reload, refreshPlansRisks],
+  );
 
   const togglePlan = useCallback(async (plan: PlanItem) => {
     const next: 'done' | 'pending' = plan.status === 'done' ? 'pending' : 'done';

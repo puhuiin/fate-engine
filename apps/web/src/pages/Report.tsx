@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useReportData } from '../hooks/useReportData';
 import { useReportExport } from '../hooks/useReportExport';
@@ -20,6 +20,13 @@ export default function Report() {
   const { id } = useParams();
   const navigate = useNavigate();
   const recordId = Number(id);
+  const [channel, setChannel] = useState('wechat');
+
+  const CHANNELS = [
+    { value: 'wechat', label: '微信支付' },
+    { value: 'alipay', label: '支付宝' },
+    { value: 'mock', label: '模拟支付' },
+  ];
 
   const {
     data,
@@ -158,6 +165,23 @@ export default function Report() {
     reCalc((rid) => navigate('/loading', { state: { recordId: rid } }));
   };
 
+  const channelPicker = (
+    <div className="pay-channels" role="radiogroup" aria-label="支付渠道">
+      {CHANNELS.map((c) => (
+        <label key={c.value} className={`pay-channel ${channel === c.value ? 'selected' : ''}`}>
+          <input
+            type="radio"
+            name="payChannel"
+            value={c.value}
+            checked={channel === c.value}
+            onChange={() => setChannel(c.value)}
+          />
+          {c.label}
+        </label>
+      ))}
+    </div>
+  );
+
   const plainGuide = buildGuide({
     trueSolarHours: data.l1 ? data.l1.timeCorrection.trueSolarHours : undefined,
     l3: data.l3,
@@ -197,8 +221,9 @@ export default function Report() {
           <div className="lock-banner">
             <strong>深度报告解锁 ¥99</strong>
             <p>解锁 L4 六维落地、L5 卡点溯源、L6 命运线、L7 综合结论、L8 改运方案、L9 课题总结。</p>
+            {channelPicker}
             {unlockError && <p className="error">{unlockError}</p>}
-            <button className="unlock-btn" onClick={unlock} disabled={unlocking}>
+            <button className="unlock-btn" onClick={() => unlock(channel)} disabled={unlocking}>
               {unlocking ? '支付处理中…' : '立即解锁'}
             </button>
           </div>
@@ -262,8 +287,9 @@ export default function Report() {
             <div className="lock-card">
               <strong>深度测算层已锁定</strong>
               <p>该层为付费深度内容，解锁后可查看完整解析与行动方案。</p>
+              {channelPicker}
               {unlockError && <p className="error">{unlockError}</p>}
-              <button className="unlock-btn" onClick={unlock} disabled={unlocking}>
+              <button className="unlock-btn" onClick={() => unlock(channel)} disabled={unlocking}>
                 {unlocking ? '处理中…' : '解锁该层'}
               </button>
             </div>

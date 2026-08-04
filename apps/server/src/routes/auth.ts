@@ -136,7 +136,11 @@ export function authRoutes(
 
   /** 更新个人资料（当前支持昵称修改，字段级校验，nickname 1-30） */
   app.patch('/api/v1/auth/profile', { preHandler: app.authenticate }, async (req, reply) => {
-    const { nickname } = assertSchema(profileUpdateSchema, req.body ?? {}, '昵称长度需为 1-30 个字符');
+    const { nickname } = assertSchema(
+      profileUpdateSchema,
+      req.body ?? {},
+      '昵称长度需为 1-30 个字符',
+    );
     repos.users.updateNickname(req.userId, nickname);
     const user = repos.users.findById(req.userId);
     return reply.send(ok(user, '资料已更新'));

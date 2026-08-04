@@ -972,6 +972,41 @@ table.kv td.renwei {
   cursor: not-allowed;
 }
 
+/* 支付渠道选择 */
+.pay-channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pay-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
+  color: #55503f;
+  cursor: pointer;
+  background: #fffdf7;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.pay-channel input {
+  position: absolute;
+  opacity: 0;
+}
+
+.pay-channel.selected {
+  border-color: var(--gold);
+  background: #faf4e4;
+  color: #8a6d0b;
+  font-weight: 600;
+}
+
 .lock-card {
   text-align: center;
   padding: 32px 16px;
