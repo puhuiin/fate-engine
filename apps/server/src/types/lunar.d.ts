@@ -28,6 +28,8 @@ declare module 'lunar-javascript' {
     getYear(): number;
     getMonth(): number;
     getDay(): number;
+    getDayGan(): string;
+    getDayZhi(): string;
     getMonthInChinese(): string;
     /** 当日节气名，无则空串 */
     getJieQi(): string;

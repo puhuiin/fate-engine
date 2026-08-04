@@ -15,6 +15,9 @@ import { buildNineLayerReport } from '../src/report.js';
 import { parseClockDate } from '../src/modules/l1/l1.js';
 import { isRealTime } from '../src/schema.js';
 
+/** 固定"当前年份"保证测试确定性（大运定位/行运评分随年份变化） */
+const CURRENT_YEAR = 2026;
+
 const l1 = runL1({
   solarDate: '2002-11-29',
   solarTime: '20:40',
@@ -23,7 +26,7 @@ const l1 = runL1({
   cityName: '北京',
   timezoneOffset: 8,
 });
-const l2 = runL2(l1.timeCorrection.trueSolarClockTime, 'male', l1.normalized.timeKnown);
+const l2 = runL2(l1.timeCorrection.trueSolarClockTime, 'male', l1.normalized.timeKnown, CURRENT_YEAR);
 const l3 = runL3(l2.bazi);
 const l4 = runL4(l2.bazi);
 const l5 = runL5(l2.bazi);

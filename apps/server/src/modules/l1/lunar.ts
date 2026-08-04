@@ -23,6 +23,28 @@ export interface LunarL1Result {
   jieQiNote: string; // 交节归属说明
 }
 
+const GAN_INDEX: Record<string, number> = {
+  甲: 0, 乙: 1, 丙: 2, 丁: 3, 戊: 4,
+  己: 5, 庚: 6, 辛: 7, 壬: 8, 癸: 9,
+};
+
+const ZHI_INDEX: Record<string, number> = {
+  子: 0, 丑: 1, 寅: 2, 卯: 3, 辰: 4, 巳: 5,
+  午: 6, 未: 7, 申: 8, 酉: 9, 戌: 10, 亥: 11,
+};
+
+/**
+ * 干支组合在六十甲子中的序号（0=甲子）。
+ * 解同余：n ≡ ganIndex (mod 10)，n ≡ zhiIndex (mod 12)，对合法组合恒有唯一解。
+ */
+function ganZhiIndex(gan: string, zhi: string): number {
+  const g = GAN_INDEX[gan] ?? 0;
+  const z = ZHI_INDEX[zhi] ?? 0;
+  if ((z - g) % 2 !== 0) return 0; // 非法组合防御
+  const k = (((5 * ((z - g) / 2)) % 6) + 6) % 6; // 5k ≡ (z-g)/2 (mod 6)，5 为 5 的模逆
+  return g + 10 * k;
+}
+
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
@@ -84,7 +106,7 @@ export function computeLunar(clockTime: Date): LunarL1Result {
     lunarMonth: lunar.getMonth(),
     lunarDay: lunar.getDay(),
     isLeapMonth: lunar.getMonthInChinese().includes('闰'),
-    dayInGanZhiIndex: 0,
+    dayInGanZhiIndex: ganZhiIndex(lunar.getDayGan(), lunar.getDayZhi()),
     currentJieQi,
     prevJieQi: prevJieQiObj,
     nextJieQi: nextJieQiObj,

@@ -38,8 +38,13 @@ function naYinWuXing(naYin: string): string {
   return last in { 金: 1, 木: 1, 水: 1, 火: 1, 土: 1 } ? last : '';
 }
 
-export function runL2(clockTime: Date, gender: string, timeKnown: boolean): L2Output {
-  const bazi = buildBazi(clockTime, gender);
+export function runL2(
+  clockTime: Date,
+  gender: string,
+  timeKnown: boolean,
+  currentYear?: number,
+): L2Output {
+  const bazi = buildBazi(clockTime, gender, currentYear);
 
   const pillarRows = ['year', 'month', 'day', 'time'].map((k) => {
     const p = bazi.pillars[k as keyof typeof bazi.pillars];

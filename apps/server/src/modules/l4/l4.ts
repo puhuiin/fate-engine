@@ -79,7 +79,7 @@ export function runL4(bazi: BaziResult): L4Output {
     decision: clamp(55 + countOf('七杀') * 10 + countOf('偏印') * 6),
   };
 
-  // 流年分：以当前大运天干五行与日主生克定基调，2026 为当前年
+  // 流年分：以当前大运天干五行与日主生克定基调（大运定位年份取自 L2 当前年份）
   const daYunWx = bazi.currentDaYun?.ganzhi?.[0]
     ? ({ 甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土', 己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水' } as Record<string, string>)[bazi.currentDaYun.ganzhi[0]] ?? ''
     : '';

@@ -7,6 +7,9 @@ import { runL2 } from '../src/modules/l2/l2.js';
 import { runL3 } from '../src/modules/l3/l3.js';
 import { runL4 } from '../src/modules/l4/l4.js';
 
+/** 固定"当前年份"保证测试确定性（大运定位随年份变化） */
+const CURRENT_YEAR = 2026;
+
 const l1 = runL1({
   solarDate: '2002-11-29',
   solarTime: '20:40',
@@ -15,9 +18,9 @@ const l1 = runL1({
   cityName: '北京',
   timezoneOffset: 8,
 });
-const l2 = runL2(l1.timeCorrection.trueSolarClockTime, 'male', l1.normalized.timeKnown);
-const l2f = runL2(l1.timeCorrection.trueSolarClockTime, 'female', l1.normalized.timeKnown);
-const l2o = runL2(l1.timeCorrection.trueSolarClockTime, 'other', l1.normalized.timeKnown);
+const l2 = runL2(l1.timeCorrection.trueSolarClockTime, 'male', l1.normalized.timeKnown, CURRENT_YEAR);
+const l2f = runL2(l1.timeCorrection.trueSolarClockTime, 'female', l1.normalized.timeKnown, CURRENT_YEAR);
+const l2o = runL2(l1.timeCorrection.trueSolarClockTime, 'other', l1.normalized.timeKnown, CURRENT_YEAR);
 const l3 = runL3(l2.bazi);
 const l4 = runL4(l2.bazi);
 

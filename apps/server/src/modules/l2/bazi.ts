@@ -66,7 +66,11 @@ function buildPillar(gan: string, zhi: string, ganZhi: string, wuxing: string, n
   };
 }
 
-export function buildBazi(clockTime: Date, gender: string): BaziResult {
+export function buildBazi(
+  clockTime: Date,
+  gender: string,
+  currentYear: number = new Date().getUTCFullYear(),
+): BaziResult {
   const solar = Solar.fromYmdHms(
     clockTime.getUTCFullYear(),
     clockTime.getUTCMonth() + 1,
@@ -129,9 +133,9 @@ export function buildBazi(clockTime: Date, gender: string): BaziResult {
       endYear: d.getEndYear(),
     }));
 
-  // 当前所处大运（以 2026 为当前年）
-  const currentYear = 2026;
-  const currentDaYun = daYun.find((d) => currentYear >= d.startYear && currentYear <= d.endYear) ?? null;
+  // 当前所处大运（以调用方指定年份为当前年，缺省取系统当前年份，避免硬编码 2026 过期失真）
+  const currentDaYun =
+    daYun.find((d) => currentYear >= d.startYear && currentYear <= d.endYear) ?? null;
 
   return {
     gender,
