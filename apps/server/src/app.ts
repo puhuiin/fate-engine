@@ -9,6 +9,7 @@ import { planRoutes } from './routes/plans.js';
 import { kernelRoutes } from './routes/kernel.js';
 import { fail, ok } from './lib/util.js';
 import { createRateLimitHook } from './lib/rateLimit.js';
+import { registerCompression } from './lib/compress.js';
 import { searchCities } from './modules/l1/location.js';
 
 export interface BuildAppOpts {
@@ -89,8 +90,12 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
       'X-XSS-Protection': '1; mode=block',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
     });
   });
+
+  /** 响应压缩（仅 gzip，体积达标才压缩） */
+  registerCompression(app);
 
   /** 未捕获异常统一收敛为 ApiResp JSON，避免暴露 HTML/堆栈给客户端 */
   app.setErrorHandler((err: unknown, _req, reply) => {

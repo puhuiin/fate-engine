@@ -83,6 +83,28 @@ body {
   color: #3d3318;
 }
 
+/* 错误边界兜底与路由懒加载提示 */
+.error-card {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.error-card h2 {
+  color: #9c2b2b;
+}
+
+.error-card .btn-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.route-loading {
+  text-align: center;
+  padding: 56px 24px;
+}
+
 .hint {
   color: var(--dim);
   font-size: 13px;

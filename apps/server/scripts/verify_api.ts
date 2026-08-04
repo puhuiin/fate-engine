@@ -5,6 +5,7 @@
  */
 import { createDb } from '../src/db/client.js';
 import { buildApp } from '../src/app.js';
+import { decompress } from '../src/lib/compress.js';
 import type { FastifyInstance } from 'fastify';
 
 const db = createDb(':memory:');
@@ -634,6 +635,68 @@ const bareBearer = await app.inject({
   headers: { authorization: 'Bearer   ' },
 });
 check('空 Bearer token 401', bareBearer.statusCode === 401 && bareBearer.json().code === 401);
+
+// 14.6 基础安全响应头（nosniff / DENY / no-referrer / Permissions-Policy）
+const secRes = await app.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+check(
+  '安全响应头 nosniff/DENY/no-referrer/XSS 齐备',
+  secRes.headers['x-content-type-options'] === 'nosniff' &&
+    secRes.headers['x-frame-options'] === 'DENY' &&
+    secRes.headers['referrer-policy'] === 'no-referrer' &&
+    secRes.headers['x-xss-protection'] === '1; mode=block',
+);
+check(
+  'Permissions-Policy 默认禁相机/麦克风/定位/支付',
+  (secRes.headers['permissions-policy'] ?? '').includes('camera=()') &&
+    (secRes.headers['permissions-policy'] ?? '').includes('geolocation=()') &&
+    (secRes.headers['permissions-policy'] ?? '').includes('payment=()'),
+);
+
+// 14.7 响应 gzip 压缩：大响应按 Accept-Encoding 压缩，小响应不压缩
+const gzDb = createDb(':memory:');
+const gzApp: FastifyInstance = buildApp(gzDb, { logger: false, rateLimit: false });
+const gzLogin = await gzApp.inject({ method: 'POST', url: '/api/v1/auth/guest', payload: {} });
+const gzToken = (gzLogin.json() as { data: { token: string } }).data.token;
+const gzArc = await gzApp.inject({
+  method: 'POST',
+  url: '/api/v1/archives',
+  payload: {
+    gender: 'male',
+    solarDate: '1990-06-15',
+    solarTime: '14:30',
+    cityName: '北京',
+    timePrecision: 'minute',
+    sourceReliability: 'certificate',
+  },
+  headers: { authorization: `Bearer ${gzToken}` },
+});
+const gzArcId = (gzArc.json() as { data: { id: number } }).data.id;
+const gzCalc = await gzApp.inject({
+  method: 'POST',
+  url: '/api/v1/calculate',
+  payload: { archiveId: gzArcId, calcType: 'standard' },
+  headers: { authorization: `Bearer ${gzToken}` },
+});
+const gzRecId = (gzCalc.json() as { data: { recordId: number } }).data.recordId;
+const gzHit = await gzApp.inject({
+  method: 'GET',
+  url: `/api/v1/records/${gzRecId}`,
+  headers: { authorization: `Bearer ${gzToken}`, 'accept-encoding': 'gzip' },
+});
+check(
+  'gzip：大响应压缩返回 content-encoding: gzip',
+  gzHit.headers['content-encoding'] === 'gzip',
+);
+const gzJson = JSON.parse(await decompress(Buffer.from(gzHit.rawPayload))) as { code: number };
+check('gzip：解压后 JSON 完整可解析', gzJson.code === 200);
+const gzSmall = await gzApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+check(
+  'gzip：小响应不压缩（无 content-encoding）',
+  gzSmall.headers['content-encoding'] === undefined,
+);
+const gzNoAcc = await gzApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+check('gzip：未声明 accept-encoding 不压缩', gzNoAcc.headers['content-encoding'] === undefined);
+gzDb.close();
 
 // ---------- 15. trustProxy：反向代理后按真实客户端 IP 限流分桶 ----------
 // 15.1 开启 trustProxy：X-Forwarded-For 决定分桶，不同真实 IP 桶互不影响

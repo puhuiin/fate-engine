@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   getRecord,
@@ -22,6 +22,28 @@ import {
 import { LAYER_NAMES, MODULE_HINT } from '../layers';
 import { buildExportText, Layer1, Layer2, Layer3, Layer4, Layer5, Layer6, Layer7, Layer8, Layer9 } from './report/layers';
 import { buildPlainGuide, type PlainPoint } from './report/plain';
+
+/** 单层渲染错误边界：某一层出错仅降级该层，不拖垮整份报告 */
+class LayerBoundary extends Component<{ layer: number; children: ReactNode }, { broken: boolean }> {
+  state = { broken: false };
+  static getDerivedStateFromError(): { broken: boolean } {
+    return { broken: true };
+  }
+  componentDidCatch(err: Error, info: ErrorInfo): void {
+    console.error(`L${this.props.layer} render error:`, err, info.componentStack);
+  }
+  render(): ReactNode {
+    if (this.state.broken) {
+      return (
+        <div className="lock-card">
+          <strong>该层渲染异常</strong>
+          <p>这一层的数据暂时无法展示，不影响其他分层。可刷新页面重试。</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function Report() {
   const { id } = useParams();
@@ -276,7 +298,7 @@ export default function Report() {
               </button>
             </div>
           ) : (
-            l.el
+            <LayerBoundary layer={l.layer}>{l.el}</LayerBoundary>
           )}
           {!l.ready && <p className="dim">该层属于「{MODULE_HINT[l.layer]}」模块，将在后续阶段接入。</p>}
         </div>
