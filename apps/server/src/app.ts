@@ -101,10 +101,15 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     });
   });
 
-  /** 未捕获异常统一收敛为 ApiResp JSON，避免暴露 HTML/堆栈给客户端 */
-  app.setErrorHandler((err: unknown, _req, reply) => {
-    const e = err as { statusCode?: number; message?: string };
+  /** 未捕获异常统一收敛为 ApiResp JSON，避免暴露 HTML/堆栈给客户端；服务端保留完整错误日志 */
+  app.setErrorHandler((err: unknown, req, reply) => {
+    const e = err as { statusCode?: number; message?: string; stack?: string };
     const status = Number(e.statusCode) || 500;
+    if (status >= 500) {
+      req.log.error({ err, path: req.url }, '未捕获异常');
+    } else {
+      req.log.warn({ err, path: req.url }, '请求被拒绝');
+    }
     reply.code(status).send(
       fail(status, status >= 500 ? '服务器开小差了，请稍后重试' : e.message ?? '请求处理失败'),
     );
@@ -121,7 +126,8 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
 
   /** 统一错误语义：业务 code≠200 时同步设置 HTTP status，避免 body 与状态码不一致 */
   app.addHook('onSend', async (_req, reply, payload) => {
-    if (typeof payload === 'string') {
+    // 状态码已非 2xx 的响应无需同步，直接透传，避免对错误/静态 payload 做无谓解析
+    if (typeof payload === 'string' && reply.statusCode >= 200 && reply.statusCode < 300) {
       try {
         const obj = JSON.parse(payload) as { code?: number };
         if (obj && typeof obj.code === 'number' && obj.code !== 200) {

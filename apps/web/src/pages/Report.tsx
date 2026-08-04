@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   getRecord,
   getPlans,
@@ -7,6 +7,7 @@ import {
   createUnlockOrder,
   payOrder,
   patchPlan,
+  calculate,
   type L1Result,
   type L2Result,
   type L3Result,
@@ -25,6 +26,7 @@ import { buildPlainGuide, type PlainPoint } from './report/plain';
 
 export default function Report() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const recordId = Number(id);
   const [l1, setL1] = useState<L1Result | null>(null);
   const [l2, setL2] = useState<L2Result | null>(null);
@@ -37,6 +39,8 @@ export default function Report() {
   const [l9, setL9] = useState<L9Result | null>(null);
   const [paidStatus, setPaidStatus] = useState(0);
   const [calcType, setCalcType] = useState('standard');
+  const [archiveId, setArchiveId] = useState<number | null>(null);
+  const [reCalcId, setReCalcId] = useState<number | null>(null);
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [risks, setRisks] = useState<RiskItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +65,8 @@ export default function Report() {
     setL9(r?.l9 ?? null);
     setPaidStatus(res.data?.paidStatus ?? 0);
     if (res.data?.calc_type) setCalcType(String(res.data.calc_type));
+    const aid = (res.data as { archive_id?: unknown })?.archive_id;
+    if (typeof aid === 'number' && aid > 0) setArchiveId(aid);
     setLoadError('');
     return res;
   }, [recordId]);
@@ -110,6 +116,19 @@ export default function Report() {
       }
     } catch {
       setPlans((cur) => cur.map((p) => (p.id === plan.id ? { ...p, status: plan.status } : p)));
+    }
+  };
+
+  const reCalc = async () => {
+    if (!archiveId) return;
+    setReCalcId(archiveId);
+    try {
+      const res = await calculate(archiveId, calcType);
+      navigate('/loading', { state: { recordId: res.data.recordId } });
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : '重新测算失败，请稍后重试');
+    } finally {
+      setReCalcId(null);
     }
   };
 
@@ -289,6 +308,11 @@ export default function Report() {
 
       <div className="card report-foot">
         <Link to="/">再测一次</Link> · <Link to="/history">查看历史记录</Link>
+        {archiveId && (
+          <button className="ghost" type="button" onClick={reCalc} disabled={!!reCalcId}>
+            {reCalcId ? '测算中…' : '基于此档案重新测算'}
+          </button>
+        )}
         <button className="ghost float-right" type="button" onClick={scrollTop}>
           回到顶部 ↑
         </button>
