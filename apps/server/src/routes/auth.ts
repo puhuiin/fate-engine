@@ -112,7 +112,7 @@ export function authRoutes(
     },
   );
 
-  /** 手机号验证码登录 */
+/** 手机号验证码登录 */
   app.post(
     '/api/v1/auth/phone',
     authRateLimit ? { onRequest: authRateLimit } : {},
@@ -121,7 +121,7 @@ export function authRoutes(
       if (!parsed.success) {
         return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
       }
-      const { phone, code, nickname } = parsed.data;
+      const { phone, code, nickname, mergeGuestToken } = parsed.data;
       const pending = db
         .prepare(
           `SELECT * FROM sms_code
@@ -161,7 +161,36 @@ export function authRoutes(
       if (!user) {
         return reply.send(fail(500, '用户创建失败'));
       }
-      return reply.send(ok({ user, token: signToken(user.id) }, '登录成功'));
+      // 游客数据迁移：登录成功后，将游客 token 对应账号的档案/测算记录/订单转入本账号。
+      // 事务保证一致性；guest 与手机号同源时跳过；无数据或已合并时静默返回 0。
+      let mergedArchives = 0;
+      let mergedRecords = 0;
+      if (mergeGuestToken) {
+        const guest = verifyToken(mergeGuestToken);
+        if (guest && guest.userId !== user.id) {
+          const tx = db.transaction(() => {
+            const arch = db
+              .prepare('UPDATE user_birth_archive SET user_id = ? WHERE user_id = ?')
+              .run(user.id, guest.userId);
+            const rec = db
+              .prepare('UPDATE calculate_record SET user_id = ? WHERE user_id = ?')
+              .run(user.id, guest.userId);
+            db.prepare('UPDATE order_pay SET user_id = ? WHERE user_id = ?').run(
+              user.id,
+              guest.userId,
+            );
+            mergedArchives = Number(arch.changes);
+            mergedRecords = Number(rec.changes);
+          });
+          tx();
+        }
+      }
+      return reply.send(
+        ok(
+          { user, token: signToken(user.id), merged: { archives: mergedArchives, records: mergedRecords } },
+          mergedRecords > 0 ? '登录成功，游客数据已合并' : '登录成功',
+        ),
+      );
     },
   );
   /** 当前用户信息 */

@@ -21,3 +21,6 @@ apps/server/data/
 .vscode/
 apps/web/vite.config.js
 apps/web/vite.config.d.ts
+
+# CI workflow（本地预留，需具备 workflow scope 的 token 方可推送）
+.github/workflows/

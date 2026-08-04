@@ -22,10 +22,10 @@
 | L9 | 实相兜底 | 三课结构与行运窗口，含合规声明 |
 
 ### 产品闭环
-- **登录体系**：游客 / 手机号验证码（dev 模式回显 devCode），JWT 无状态鉴权
+- **登录体系**：游客 / 手机号验证码（dev 模式回显 devCode），JWT 无状态鉴权；手机号登录时可携带游客 token 一次性合并游客档案/测算记录/订单（`mergeGuestToken`）
 - **档案管理**：个人命理档案 CRUD，记录生日、性别、出生地、时间精度、时区偏移等
 - **测算模式**：`calcType` 三档（standard / quantum / ultimate），深度越高展开的未来分叉点越多，报告页展示模式徽标
-- **付费解锁**：L4–L9 深度层默认 locked，订单 + mock 支付渠道解锁（支持 wechat / alipay / mock 白名单）
+- **付费解锁**：L4–L9 深度层默认 locked，订单 + mock 支付渠道解锁（支持 wechat / alipay / mock 白名单）；待支付订单默认 30 分钟有效，过期自动作废
 - **七级改运打卡**：逐条完成计划、更新状态、记录完成时间
 - **统计看板**：`/api/v1/stats/overview` 汇总档案数、测算数、解锁率、改运完成率与重点风险
 - **个人资料**：`PATCH /api/v1/auth/profile` 编辑昵称（1–30 字）
@@ -70,6 +70,9 @@ npm run dev
 | `HOST` | `0.0.0.0` | 后端监听地址 |
 | `NODE_ENV` | `development` | 生产环境需设为 `production` |
 | `FATE_SECRET` | 开发内置密钥 | JWT/签名的唯一私密源，**生产环境必填，未设置将拒绝启动** |
+| `FATE_TOKEN_TTL_SECONDS` | `604800`（7 天） | token 有效期（秒） |
+| `FATE_ORDER_TTL_SECONDS` | `1800`（30 分钟） | 待支付订单有效期（秒），过期自动作废 |
+| `DB_PATH` | `<cwd>/data/fate.db` | SQLite 数据库文件路径 |
 | `CORS_ORIGIN` | 允许全部来源 | CORS 白名单（逗号分隔），生产建议显式配置 |
 | `RATE_LIMIT_MAX` | `300` | 全局接口每 IP 每分钟请求上限（认证/注册接口固定 20） |
 | `TRUST_PROXY` | 不信任 | 反向代理后按 `X-Forwarded-For` 取真实客户端 IP 限流分桶 |
@@ -93,7 +96,7 @@ npm run verify -w @fate/server
 npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时边界（8 用例）
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆（15 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（47 断言，含深度模式差异）
-npm run verify:api -w @fate/server  # 接口层（114 断言，内存 SQLite + inject）
+npm run verify:api -w @fate/server  # 接口层（120 断言，内存 SQLite + inject）
 ```
 
 断言覆盖真实业务基准：如 `2002-11-29 20:40 北京男` → 真太阳时 20.604、戌时、日主辛/金、日柱辛丑、L4 事业 68。
@@ -109,7 +112,7 @@ npm run verify:api -w @fate/server  # 接口层（114 断言，内存 SQLite + i
 |------|------|------|
 | POST | `/api/v1/auth/guest` | 游客登录 |
 | POST | `/api/v1/auth/sms/send` | 发送短信验证码（dev 模式回显 `devCode`，60s 重发限流） |
-| POST | `/api/v1/auth/phone` | 手机号 + 验证码登录 |
+| POST | `/api/v1/auth/phone` | 手机号 + 验证码登录；body 可携带 `mergeGuestToken` 合并游客数据 |
 | GET | `/api/v1/auth/me` | 当前用户信息 |
 | PATCH | `/api/v1/auth/profile` | 编辑昵称（1–30 字） |
 

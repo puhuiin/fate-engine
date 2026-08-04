@@ -446,6 +446,47 @@ const relogin = await call('POST', '/api/v1/auth/phone', {
 });
 check('重新获取验证码后可正常登录', relogin.status === 200 && typeof relogin.json.data?.token === 'string');
 
+// ---------- 9c. 游客数据迁移：手机号登录时合并游客档案/测算记录 ----------
+const gm = await call('POST', '/api/v1/auth/guest', { body: { nickname: '待合并游客' } });
+const tokenM = gm.json.data?.token as string;
+const arcM = await call('POST', '/api/v1/archives', {
+  token: tokenM,
+  body: { gender: 'male', solarDate: '1992-03-21', solarTime: '12:30', cityName: '广州' },
+});
+const archiveM = arcM.json.data?.id as number;
+const calcM = await call('POST', '/api/v1/calculate', {
+  token: tokenM,
+  body: { archiveId: archiveM, calcType: 'standard' },
+});
+check('合并前游客独立测算成功', calcM.status === 200 && Number.isInteger(calcM.json.data?.recordId));
+
+const smsM = await call('POST', '/api/v1/auth/sms/send', {
+  body: { phone: '13766668888', channel: 'login' },
+});
+const codeM = smsM.json.data?.devCode as string;
+const phM = await call('POST', '/api/v1/auth/phone', {
+  body: { phone: '13766668888', code: codeM, mergeGuestToken: tokenM },
+});
+check(
+  '登录并合并游客数据（档案/记录均转移）',
+  phM.status === 200 &&
+    Number(phM.json.data?.merged?.records) >= 1 &&
+    Number(phM.json.data?.merged?.archives) >= 1,
+);
+const tokenMerged = phM.json.data?.token as string;
+const listMergedArc = await call('GET', '/api/v1/archives', { token: tokenMerged });
+check(
+  '合并后手机号账号可见游客档案',
+  listMergedArc.status === 200 &&
+    (listMergedArc.json.data as Array<{ id: number }>).some((a) => a.id === archiveM),
+);
+const listMergedRec = await call('GET', '/api/v1/records', { token: tokenMerged });
+check(
+  '合并后手机号账号可见游客记录',
+  listMergedRec.status === 200 &&
+    (listMergedRec.json.data as Array<{ archive_id: number }>).some((r) => r.archive_id === archiveM),
+);
+
 // ---------- 10. 越权防护：B 访问 A 的资源 → 404 ----------
 const crossArc = await call('GET', `/api/v1/archives/${archive1}`, { token: tokenB });
 check('越权读他人档案 404', crossArc.status === 404);

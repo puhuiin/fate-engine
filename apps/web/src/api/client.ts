@@ -265,6 +265,31 @@ export interface ReportItem {
   note: string | null;
 }
 
+/** 测算记录详情（GET /api/v1/records/:id） */
+export interface RecordDetail {
+  id: number;
+  archive_id: number;
+  calc_type: string;
+  status: string;
+  created_at: string;
+  report: ReportData;
+  paidStatus: number;
+  dataError: boolean;
+}
+
+/** 测算记录列表项（GET /api/v1/records） */
+export interface RecordListItem {
+  id: number;
+  archive_id: number;
+  calc_type: string;
+  status: string;
+  paid_status: number;
+  created_at: string;
+  solar_date: string;
+  solar_time: string | null;
+  city_name: string | null;
+}
+
 export function guestLogin(nickname?: string): Promise<ApiResp<{ user: User; token: string }>> {
   return request('/api/v1/auth/guest', { method: 'POST', body: JSON.stringify({ nickname }) });
 }
@@ -278,13 +303,20 @@ export function sendSmsCode(
   });
 }
 
+export interface PhoneLoginResp {
+  user: User;
+  token: string;
+  merged?: { archives: number; records: number };
+}
+
 export function phoneLogin(
   phone: string,
   code: string,
-): Promise<ApiResp<{ user: User; token: string }>> {
+  mergeGuestToken?: string,
+): Promise<ApiResp<PhoneLoginResp>> {
   return request('/api/v1/auth/phone', {
     method: 'POST',
-    body: JSON.stringify({ phone, code }),
+    body: JSON.stringify({ phone, code, ...(mergeGuestToken ? { mergeGuestToken } : {}) }),
   });
 }
 
@@ -352,14 +384,12 @@ export function calculate(
   });
 }
 
-export function getRecord(
-  id: number,
-): Promise<ApiResp<Record<string, unknown> & { report: ReportData; paidStatus?: number }>> {
+export function getRecord(id: number): Promise<ApiResp<RecordDetail>> {
   return request(`/api/v1/records/${id}`);
 }
 
 export interface RecordsPage {
-  list: Array<Record<string, unknown>>;
+  list: RecordListItem[];
   total: number;
   page: number;
   pageSize: number;
@@ -368,7 +398,7 @@ export interface RecordsPage {
 export function listRecords(
   page?: number,
   pageSize?: number,
-): Promise<ApiResp<Array<Record<string, unknown>> | RecordsPage>> {
+): Promise<ApiResp<RecordListItem[] | RecordsPage>> {
   const qs =
     page !== undefined && pageSize !== undefined ? `?page=${page}&pageSize=${pageSize}` : '';
   return request(`/api/v1/records${qs}`);

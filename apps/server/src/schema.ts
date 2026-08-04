@@ -23,6 +23,8 @@ export const phoneLoginSchema = z.object({
   phone: z.string().regex(/^1\d{10}$/, '手机号格式不正确'),
   code: z.string().min(4).max(8),
   nickname: z.string().trim().min(1).max(30).optional(),
+  /** 游客 token：登录成功后把该游客账号的档案/测算记录迁移到手机号账号（一次性合并） */
+  mergeGuestToken: z.string().max(1024).optional(),
 });
 
 export const sendSmsSchema = z.object({
