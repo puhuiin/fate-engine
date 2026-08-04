@@ -42,28 +42,32 @@ export function orderRoutes(app: FastifyInstance, db: Db): void {
       return reply.send(ok({ alreadyUnlocked: true, paidStatus: 1 }, '已解锁'));
     }
 
-    const existing = db
-      .prepare(
-        `SELECT * FROM order_pay
-         WHERE record_id = ? AND user_id = ? AND entitlement_status = 'pending'
-         ORDER BY id DESC LIMIT 1`,
-      )
-      .get(recordId, req.userId) as (Record<string, unknown> & { id: number }) | undefined;
-    if (existing) {
-      return reply.send(ok({ order: orderPublic(existing), alreadyUnlocked: false }, '存在待支付订单'));
+    const tx = db.transaction((): { existing?: OrderRow; created?: OrderRow } => {
+      const pending = db
+        .prepare(
+          `SELECT * FROM order_pay
+           WHERE record_id = ? AND user_id = ? AND entitlement_status = 'pending'
+           ORDER BY id DESC LIMIT 1`,
+        )
+        .get(recordId, req.userId) as OrderRow | undefined;
+      if (pending) return { existing: pending };
+      const orderNo = `FT${Date.now()}${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+      const info = db
+        .prepare(
+          `INSERT INTO order_pay (order_no, user_id, record_id, amount_cents, entitlement_status)
+           VALUES (?, ?, ?, ?, 'pending')`,
+        )
+        .run(orderNo, req.userId, recordId, UNLOCK_PRICE_CENTS);
+      const created = db
+        .prepare('SELECT * FROM order_pay WHERE id = ?')
+        .get(Number(info.lastInsertRowid)) as OrderRow | undefined;
+      return { created };
+    });
+    const result = tx();
+    if (result.existing) {
+      return reply.send(ok({ order: orderPublic(result.existing), alreadyUnlocked: false }, '存在待支付订单'));
     }
-
-    const orderNo = `FT${Date.now()}${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
-    const info = db
-      .prepare(
-        `INSERT INTO order_pay (order_no, user_id, record_id, amount_cents, entitlement_status)
-         VALUES (?, ?, ?, ?, 'pending')`,
-      )
-      .run(orderNo, req.userId, recordId, UNLOCK_PRICE_CENTS);
-    const order = db
-      .prepare('SELECT * FROM order_pay WHERE id = ?')
-      .get(Number(info.lastInsertRowid));
-    return reply.send(ok({ order: orderPublic(order as OrderRow), alreadyUnlocked: false }, '订单已创建'));
+    return reply.send(ok({ order: orderPublic(result.created as OrderRow), alreadyUnlocked: false }, '订单已创建'));
   });
 
   /**

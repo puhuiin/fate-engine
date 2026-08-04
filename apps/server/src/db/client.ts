@@ -116,6 +116,8 @@ export function createDb(dbPath: string = DB_PATH): Db {
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
+  db.pragma('synchronous = NORMAL');
   db.exec(DDL);
   migrateColumns(db);
   db.prepare("DELETE FROM sms_code WHERE expires_at <= datetime('now')").run();

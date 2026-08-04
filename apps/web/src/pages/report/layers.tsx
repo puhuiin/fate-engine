@@ -209,15 +209,13 @@ type PillarRow = {
 
 export function Layer2({ l2 }: { l2: L2Result }) {
   const bazi = l2.bazi;
-  const pillars = (l2.schools.find((s) => s.school === '八字命理')?.data as { pillars: PillarRow[] })
-    .pillars;
+  const pillars = (l2.schools.find((s) => s.school === '八字命理')?.data as
+    | { pillars: PillarRow[] }
+    | undefined)?.pillars;
   const nayinSchool = l2.schools.find((s) => s.school === '纳音五行论命');
-  const nayinData = nayinSchool?.data as {
-    yearNaYin: string;
-    dayNaYin: string;
-    dayNaYinWuXing: string;
-    profile: string;
-  };
+  const nayinData = nayinSchool?.data as
+    | { yearNaYin: string; dayNaYin: string; dayNaYinWuXing: string; profile: string }
+    | undefined;
 
   return (
     <div className="l2-report">
@@ -240,18 +238,24 @@ export function Layer2({ l2 }: { l2: L2Result }) {
             </tr>
           </thead>
           <tbody>
-            {pillars.map((p) => (
-              <tr key={p.position}>
-                <td>{p.position === 'year' ? '年' : p.position === 'month' ? '月' : p.position === 'day' ? '日' : '时'}</td>
-                <td className="strong">{p.ganzhi}</td>
-                <td>{p.wuxing}</td>
-                <td>{p.nayin}</td>
-                <td>{p.shishenGan}</td>
-                <td>{p.shishenZhi}</td>
-                <td>{p.hideGan}</td>
-                <td>{p.dishi}</td>
+            {pillars ? (
+              pillars.map((p) => (
+                <tr key={p.position}>
+                  <td>{p.position === 'year' ? '年' : p.position === 'month' ? '月' : p.position === 'day' ? '日' : '时'}</td>
+                  <td className="strong">{p.ganzhi}</td>
+                  <td>{p.wuxing}</td>
+                  <td>{p.nayin}</td>
+                  <td>{p.shishenGan}</td>
+                  <td>{p.shishenZhi}</td>
+                  <td>{p.hideGan}</td>
+                  <td>{p.dishi}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={8} className="dim">暂无四柱数据</td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
         <table className="kv">
@@ -312,17 +316,17 @@ export function Layer2({ l2 }: { l2: L2Result }) {
           <tbody>
             <tr>
               <td>年柱纳音</td>
-              <td>{nayinData.yearNaYin}</td>
+              <td>{nayinData?.yearNaYin ?? '—'}</td>
             </tr>
             <tr>
               <td>日柱纳音</td>
               <td>
-                {nayinData.dayNaYin}（五行{nayinData.dayNaYinWuXing}）
+                {nayinData ? `${nayinData.dayNaYin}（五行${nayinData.dayNaYinWuXing}）` : '—'}
               </td>
             </tr>
             <tr>
               <td>文化取象</td>
-              <td>{nayinData.profile}</td>
+              <td>{nayinData?.profile ?? '—'}</td>
             </tr>
           </tbody>
         </table>

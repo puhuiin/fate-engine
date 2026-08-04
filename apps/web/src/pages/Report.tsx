@@ -45,6 +45,7 @@ export default function Report() {
 
   const reload = useCallback(async () => {
     const res = await getRecord(recordId);
+    if (res.code !== 200) throw new Error(res.msg || '记录不存在或无权访问');
     if (res.data?.dataError) throw new Error('该记录报告数据异常，请返回记录列表重新测算');
     const r = res.data?.report;
     setL1(r?.l1 ?? null);
@@ -56,7 +57,7 @@ export default function Report() {
     setL7(r?.l7 ?? null);
     setL8(r?.l8 ?? null);
     setL9(r?.l9 ?? null);
-    setPaidStatus(res.data.paidStatus ?? 0);
+    setPaidStatus(res.data?.paidStatus ?? 0);
     setLoadError('');
     return res;
   }, [recordId]);
@@ -147,7 +148,19 @@ export default function Report() {
   };
 
   const exportText = async () => {
-    const text = buildExportText({ l1, l2, l3, l4, l5, l6, l7, l8, l9, risks });
+    const unlocked = paidStatus === 1;
+    const text = buildExportText({
+      l1,
+      l2,
+      l3,
+      l4: unlocked ? l4 : null,
+      l5: unlocked ? l5 : null,
+      l6: unlocked ? l6 : null,
+      l7: unlocked ? l7 : null,
+      l8: unlocked ? l8 : null,
+      l9: unlocked ? l9 : null,
+      risks: unlocked ? risks : [],
+    });
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -194,10 +207,10 @@ export default function Report() {
               key={l.layer}
               type="button"
               onClick={() => scrollToLayer(l.layer)}
-              className={`layer-nav-btn ${l.locked && !l.ready ? 'locked' : ''}`}
+              className={`layer-nav-btn ${l.locked ? 'locked' : ''}`}
             >
               L{l.layer}
-              {l.locked && !l.ready ? ' 🔒' : ''}
+              {l.locked ? ' 🔒' : ''}
             </button>
           ))}
         </nav>
@@ -212,7 +225,7 @@ export default function Report() {
               {l.ready ? '已上线' : '待上线'}
             </span>
           </div>
-          {l.locked && !l.ready ? (
+          {l.locked ? (
             <div className="lock-card">
               <strong>深度测算层已锁定</strong>
               <p>该层为付费深度内容，解锁后可查看完整解析与行动方案。</p>

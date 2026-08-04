@@ -8,7 +8,7 @@ import { buildApp } from '../src/app.js';
 import type { FastifyInstance } from 'fastify';
 
 const db = createDb(':memory:');
-const app: FastifyInstance = buildApp(db, { logger: false });
+const app: FastifyInstance = buildApp(db, { logger: false, rateLimit: false });
 
 interface Resp {
   status: number;
@@ -410,23 +410,6 @@ const relogin = await call('POST', '/api/v1/auth/phone', {
 });
 check('重新获取验证码后可正常登录', relogin.status === 200 && typeof relogin.json.data?.token === 'string');
 
-// ---------- 9c. 短信 IP 级限流：防短信轰炸 ----------
-const ipBomb = '203.0.113.99';
-let bombBlocked = 0;
-for (let i = 0; i < 11; i++) {
-  const r = await call('POST', '/api/v1/auth/sms/send', {
-    body: { phone: String(13600000000 + i), channel: 'login' },
-    remoteAddress: ipBomb,
-  });
-  if (r.status === 429) bombBlocked++;
-}
-check('同一 IP 第 11 次发送验证码被限流 429', bombBlocked === 1);
-const ipOther = await call('POST', '/api/v1/auth/sms/send', {
-  body: { phone: '13699998888', channel: 'login' },
-  remoteAddress: '203.0.113.200',
-});
-check('不同 IP 不受限流影响可正常发送', ipOther.status === 200);
-
 // ---------- 10. 越权防护：B 访问 A 的资源 → 404 ----------
 const crossArc = await call('GET', `/api/v1/archives/${archive1}`, { token: tokenB });
 check('越权读他人档案 404', crossArc.status === 404);
@@ -551,6 +534,209 @@ const klOver = await call('POST', '/api/v1/kernel/log', {
   body: { version: 'V16', ruleName: 'x'.repeat(51), ruleDetail: '' },
 });
 check('kernel 超长 ruleName 拒绝 400', klOver.status === 400 && klOver.json.code === 400);
+
+// ---------- 14. 生产安全加固 ----------
+// 14.1 全局速率限制：独立实例（max=3），前 3 次放行、第 4 次起 429，响应为统一 ApiResp
+const rlDb = createDb(':memory:');
+const rlApp: FastifyInstance = buildApp(rlDb, {
+  logger: false,
+  rateLimit: { max: 3, windowMs: 60 * 1000 },
+});
+const rlStatus: number[] = [];
+for (let i = 0; i < 5; i++) {
+  const r = await rlApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+  rlStatus.push(r.statusCode);
+}
+check(
+  '全局限流：前 3 次放行、第 4 次起 429',
+  rlStatus.slice(0, 3).every((s) => s === 200) && rlStatus[3] === 429 && rlStatus[4] === 429,
+);
+const rlHit = await rlApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+check(
+  '限流响应为统一 ApiResp(code=429)',
+  rlHit.statusCode === 429 && (rlHit.json() as { code: number }).code === 429,
+);
+rlDb.close();
+
+// 14.2 认证接口限流：独立实例（默认开启限流），guest 连续调用第 21 次起 429
+const authRlDb = createDb(':memory:');
+const authRlApp: FastifyInstance = buildApp(authRlDb, { logger: false });
+const authStatus: number[] = [];
+for (let i = 0; i < 22; i++) {
+  const r = await authRlApp.inject({ method: 'POST', url: '/api/v1/auth/guest', payload: {} });
+  authStatus.push(r.statusCode);
+}
+check(
+  '认证接口限流：前 20 次放行、第 21 次起 429',
+  authStatus.slice(0, 20).every((s) => s === 200) &&
+    authStatus[20] === 429 &&
+    authStatus[21] === 429,
+);
+authRlDb.close();
+
+// 14.3 CORS 白名单：拒绝陌生来源，放行白名单来源
+const corsDb = createDb(':memory:');
+const corsApp: FastifyInstance = buildApp(corsDb, {
+  logger: false,
+  rateLimit: false,
+  corsOrigins: ['http://allowed.example'],
+});
+const evilCors = await corsApp.inject({
+  method: 'GET',
+  url: '/api/v1/locations/search?q=bei',
+  headers: { origin: 'https://evil.example' },
+});
+const okCors = await corsApp.inject({
+  method: 'GET',
+  url: '/api/v1/locations/search?q=bei',
+  headers: { origin: 'http://allowed.example' },
+});
+check(
+  'CORS 白名单拒绝陌生来源（无 ACAO 头）',
+  evilCors.headers['access-control-allow-origin'] === undefined,
+);
+check(
+  'CORS 白名单放行允许来源',
+  okCors.headers['access-control-allow-origin'] === 'http://allowed.example',
+);
+corsDb.close();
+
+// 14.4 请求体上限：>64KB body 返回 413 统一响应
+const bigBody = await call('POST', '/api/v1/auth/guest', {
+  body: { nickname: 'x'.repeat(100 * 1024) },
+});
+check('超大请求体拒绝 413', bigBody.status === 413 && bigBody.json.code === 413);
+
+// 14.5 requireAuth Bearer 严格校验：非 Bearer 前缀一律 401
+const basicAuth = await app.inject({
+  method: 'GET',
+  url: '/api/v1/archives',
+  headers: { authorization: 'Basic dXNlcjpwYXNz' },
+});
+check('Basic 头不带 Bearer 前缀 401', basicAuth.statusCode === 401 && basicAuth.json().code === 401);
+const bareBearer = await app.inject({
+  method: 'GET',
+  url: '/api/v1/archives',
+  headers: { authorization: 'Bearer   ' },
+});
+check('空 Bearer token 401', bareBearer.statusCode === 401 && bareBearer.json().code === 401);
+
+// ---------- 15. trustProxy：反向代理后按真实客户端 IP 限流分桶 ----------
+// 15.1 开启 trustProxy：X-Forwarded-For 决定分桶，不同真实 IP 桶互不影响
+const tpDb = createDb(':memory:');
+const tpApp: FastifyInstance = buildApp(tpDb, {
+  logger: false,
+  rateLimit: { max: 2, windowMs: 60 * 1000 },
+  trustProxy: true,
+});
+const tpStatus: number[] = [];
+for (let i = 0; i < 3; i++) {
+  const r = await tpApp.inject({
+    method: 'GET',
+    url: '/api/v1/locations/search?q=bei',
+    headers: { 'x-forwarded-for': '203.0.113.10' },
+  });
+  tpStatus.push(r.statusCode);
+}
+check(
+  'trustProxy：同一真实 IP 前 2 次放行、第 3 次 429',
+  tpStatus.slice(0, 2).every((s) => s === 200) && tpStatus[2] === 429,
+);
+const otherIp = await tpApp.inject({
+  method: 'GET',
+  url: '/api/v1/locations/search?q=bei',
+  headers: { 'x-forwarded-for': '203.0.113.11' },
+});
+check('trustProxy：不同真实 IP 独立分桶放行', otherIp.statusCode === 200);
+tpDb.close();
+
+// 15.2 未开 trustProxy：XFF 被忽略，全部按直连地址同桶计数
+const noTpDb = createDb(':memory:');
+const noTpApp: FastifyInstance = buildApp(noTpDb, {
+  logger: false,
+  rateLimit: { max: 2, windowMs: 60 * 1000 },
+});
+const noTpStatus: number[] = [];
+for (let i = 0; i < 3; i++) {
+  const r = await noTpApp.inject({
+    method: 'GET',
+    url: '/api/v1/locations/search?q=bei',
+    headers: { 'x-forwarded-for': `203.0.113.${30 + i}` },
+  });
+  noTpStatus.push(r.statusCode);
+}
+check(
+  '未开 trustProxy：不同 XFF 仍同桶计数（第 3 次 429）',
+  noTpStatus.slice(0, 2).every((s) => s === 200) && noTpStatus[2] === 429,
+);
+noTpDb.close();
+
+// ---------- 16. 档案部分更新：未传字段不被默认值覆盖，null 可置空 ----------
+const updArc = await call('POST', '/api/v1/archives', {
+  token: tokenA,
+  body: {
+    gender: 'male',
+    solarDate: '2001-05-20',
+    solarTime: '08:30',
+    timePrecision: 'fuzzy',
+    sourceReliability: 'family',
+  },
+});
+const updId = (updArc.json.data as { id: number }).id;
+const updPatch = await call('PATCH', `/api/v1/archives/${updId}`, {
+  token: tokenA,
+  body: { note: '仅改备注' },
+});
+const updAfter = await call('GET', `/api/v1/archives/${updId}`, { token: tokenA });
+const updData = updAfter.json.data as Record<string, unknown>;
+check('PATCH 部分更新成功（仅改 note）', updPatch.status === 200 && updData.note === '仅改备注');
+check('PATCH 未传字段不被覆盖（time_precision 保持 fuzzy）', updData.time_precision === 'fuzzy');
+check('PATCH 未传字段不被覆盖（source_reliability 保持 family）', updData.source_reliability === 'family');
+const updSolar = await call('GET', `/api/v1/archives/${updId}`, { token: tokenA });
+check('PATCH 未传字段不被覆盖（solar_time 保持 08:30）', (updSolar.json.data as { solar_time: string }).solar_time === '08:30');
+
+// null 显式置空时间字段
+const nullPatch = await call('PATCH', `/api/v1/archives/${updId}`, {
+  token: tokenA,
+  body: { solarTime: null },
+});
+const nullAfter = await call('GET', `/api/v1/archives/${updId}`, { token: tokenA });
+check(
+  'PATCH null 置空时间字段',
+  nullPatch.status === 200 && (nullAfter.json.data as { solar_time?: string | null }).solar_time === null,
+);
+
+// ---------- 17. 无时间档案：置信度强制降级，不虚高 ----------
+// API 直接传 timePrecision='minute' 但不带 solarTime 时，引擎按正午 12:00 占位推定，
+// 置信度必须按 day 级评级（不得给出分钟级的精确假象）。
+const noTimeArc = await call('POST', '/api/v1/archives', {
+  token: tokenA,
+  body: {
+    gender: 'male',
+    solarDate: '2003-03-15',
+    timePrecision: 'minute',
+    sourceReliability: 'certificate',
+  },
+});
+const noTimeArcId = (noTimeArc.json.data as { id: number }).id;
+const noTimeCalc = await call('POST', '/api/v1/calculate', {
+  token: tokenA,
+  body: { archiveId: noTimeArcId },
+});
+const noTimeL1 = (
+  (noTimeCalc.json.data?.report as Array<{ layer: number; data: unknown }> | null)?.find(
+    (x) => x.layer === 1,
+  )?.data ?? {}
+) as Record<string, unknown>;
+const noTimeNormalized = (noTimeL1.normalized ?? {}) as Record<string, unknown>;
+const noTimeRating = (noTimeL1.rating ?? { confidence: 0 }) as { confidence: number };
+check('无时间档案测算成功', noTimeCalc.status === 200);
+check('无时间档案 timeKnown=false', noTimeNormalized.timeKnown === false);
+check('无时间档案时间标注为占位', String(noTimeNormalized.solarTime).includes('时间未知'));
+check(
+  '无时间档案置信度按日级降级（<60，拒绝 100 分钟级假象）',
+  typeof noTimeRating.confidence === 'number' && noTimeRating.confidence < 60,
+);
 
 db.close();
 
