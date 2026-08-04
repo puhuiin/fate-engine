@@ -82,6 +82,16 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     );
   }
 
+  /** 基础安全响应头：防 MIME 嗅探 / 点击劫持 / 页面内联泄露来源 */
+  app.addHook('onRequest', async (_req, reply) => {
+    reply.headers({
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'Referrer-Policy': 'no-referrer',
+      'X-XSS-Protection': '1; mode=block',
+    });
+  });
+
   /** 未捕获异常统一收敛为 ApiResp JSON，避免暴露 HTML/堆栈给客户端 */
   app.setErrorHandler((err: unknown, _req, reply) => {
     const e = err as { statusCode?: number; message?: string };

@@ -9,6 +9,11 @@ export default function Loading() {
   const started = useRef(false);
   const [doneCount, setDoneCount] = useState(0);
 
+  const skip = () => {
+    if (state) navigate(`/report/${state.recordId}`, { replace: true });
+    else navigate('/');
+  };
+
   useEffect(() => {
     if (!state || started.current) return;
     started.current = true;
@@ -17,11 +22,11 @@ export default function Loading() {
       setDoneCount((n) => {
         if (n + 1 >= total) {
           clearInterval(interval);
-          setTimeout(() => navigate(`/report/${state.recordId}`, { replace: true }), 600);
+          setTimeout(() => navigate(`/report/${state.recordId}`, { replace: true }), 300);
         }
         return n + 1;
       });
-    }, 420);
+    }, 220);
     return () => clearInterval(interval);
   }, [navigate, state]);
 
@@ -58,6 +63,9 @@ export default function Loading() {
           );
         })}
       </div>
+      <button type="button" className="ghost skip-btn" onClick={skip}>
+        跳过动画，立即查看报告
+      </button>
     </div>
   );
 }

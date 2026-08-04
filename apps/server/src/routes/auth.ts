@@ -79,12 +79,15 @@ export function authRoutes(
         .prepare(
           `SELECT created_at FROM sms_code
          WHERE phone = ? AND used = 0 AND expires_at > datetime('now')
+           AND created_at > datetime('now', '-60 seconds')
          ORDER BY id DESC LIMIT 1`,
         )
         .get(phone) as { created_at: string } | undefined;
       if (recent) {
-        return reply.send(fail(429, '验证码已发送，请勿频繁请求'));
+        return reply.send(fail(429, '验证码发送频繁，请 60 秒后再试'));
       }
+      // 重发窗口已过：作废历史未用验证码，避免同一手机号同时存在多个有效码
+      db.prepare('UPDATE sms_code SET used = 1 WHERE phone = ? AND used = 0').run(phone);
 
       const code = String(crypto.randomInt(100000, 1000000));
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000)

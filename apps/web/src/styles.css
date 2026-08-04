@@ -241,6 +241,10 @@ table.kv .link-btn:first-child {
   text-align: center;
 }
 
+.loading-card .skip-btn {
+  margin-top: 16px;
+}
+
 .orb {
   width: 64px;
   height: 64px;

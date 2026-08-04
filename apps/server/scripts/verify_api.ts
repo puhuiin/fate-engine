@@ -382,6 +382,20 @@ const phBad = await call('POST', '/api/v1/auth/phone', {
 });
 check('错误验证码 403', phBad.status === 403 && phBad.json.code === 403);
 
+// ---------- 9a. 验证码 60 秒重发窗口：冷却后允许重发且旧码作废 ----------
+db.prepare(
+  "UPDATE sms_code SET created_at = datetime('now', '-120 seconds') WHERE phone = '13812345678' AND used = 0",
+).run();
+const smsRetry = await call('POST', '/api/v1/auth/sms/send', {
+  body: { phone: '13812345678', channel: 'login' },
+});
+check(
+  '60 秒冷却后允许重新发送验证码',
+  smsRetry.status === 200 && typeof smsRetry.json.data?.devCode === 'string',
+);
+const unUsed = count('sms_code', "phone = '13812345678' AND used = 0");
+check('重发后历史未用验证码作废（仅 1 个有效码）', unUsed === 1);
+
 // ---------- 9b. 验证码暴力枚举防护：5 次错误后作废 ----------
 const sms2 = await call('POST', '/api/v1/auth/sms/send', {
   body: { phone: '13900001111', channel: 'login' },

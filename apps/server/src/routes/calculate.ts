@@ -45,6 +45,14 @@ export function calculateRoutes(app: FastifyInstance, db: Db): void {
     }
 
     let l1: ReturnType<typeof runL1>;
+    let l2: ReturnType<typeof runL2>;
+    let l3: ReturnType<typeof runL3>;
+    let l4: ReturnType<typeof runL4>;
+    let l5: ReturnType<typeof runL5>;
+    let l6: ReturnType<typeof runL6>;
+    let l7: ReturnType<typeof runL7>;
+    let l8: ReturnType<typeof runL8>;
+    let l9: ReturnType<typeof runL9>;
     try {
       l1 = runL1({
         solarDate: archive.solar_date,
@@ -56,18 +64,18 @@ export function calculateRoutes(app: FastifyInstance, db: Db): void {
         latitude: archive.latitude ?? undefined,
         timezoneOffset: archive.timezone_offset ?? 8,
       });
+
+      l2 = runL2(l1.timeCorrection.trueSolarClockTime, archive.gender ?? 'other', l1.normalized.timeKnown);
+      l3 = runL3(l2.bazi);
+      l4 = runL4(l2.bazi);
+      l5 = runL5(l2.bazi);
+      l6 = runL6(l2.bazi, l4, l5);
+      l7 = runL7(l1, l2, l4, l5);
+      l8 = runL8(l4, l5, l2.bazi);
+      l9 = runL9(l2.bazi, l4, l5, l7);
     } catch (e) {
       return reply.send(fail(400, e instanceof Error ? e.message : '出生信息不合法，请重新编辑档案'));
     }
-
-    const l2 = runL2(l1.timeCorrection.trueSolarClockTime, archive.gender ?? 'other', l1.normalized.timeKnown);
-    const l3 = runL3(l2.bazi);
-    const l4 = runL4(l2.bazi);
-    const l5 = runL5(l2.bazi);
-    const l6 = runL6(l2.bazi, l4, l5);
-    const l7 = runL7(l1, l2, l4, l5);
-    const l8 = runL8(l4, l5, l2.bazi);
-    const l9 = runL9(l2.bazi, l4, l5, l7);
 
     const report = buildNineLayerReport(l1, l2, l3, l4, l5, l6, l7, l8, l9);
 
