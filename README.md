@@ -25,8 +25,9 @@
 - **登录体系**：游客 / 手机号验证码（dev 模式回显 devCode），JWT 无状态鉴权；手机号登录时可携带游客 token 一次性合并游客档案/测算记录/订单（`mergeGuestToken`）
 - **档案管理**：个人命理档案 CRUD，记录生日、性别、出生地、时间精度、时区偏移等
 - **测算模式**：`calcType` 三档（standard / quantum / ultimate），深度越高展开的未来分叉点越多，报告页展示模式徽标
-- **付费解锁**：L4–L9 深度层默认 locked，订单 + mock 支付渠道解锁（支持 wechat / alipay / mock 白名单）；待支付订单默认 30 分钟有效，过期自动作废
+- **付费解锁**：L4–L9 深度层默认 locked，订单 + mock 支付渠道解锁（支持 wechat / alipay / mock 白名单）；待支付订单默认 30 分钟有效，过期自动作废，并可手动取消（`POST /orders/:id/cancel`）；服务内置过期清理定时任务，启动即清一轮 + 每 60s 批量作废超时订单
 - **七级改运打卡**：逐条完成计划、更新状态、记录完成时间
+- **测算历史**：记录列表支持 `calcType` 深度模式筛选（standard / quantum / ultimate），分页参数带容错（自动 clamp）
 - **统计看板**：`/api/v1/stats/overview` 汇总档案数、测算数、解锁率、改运完成率与重点风险
 - **个人资料**：`PATCH /api/v1/auth/profile` 编辑昵称（1–30 字）
 - **内核迭代留痕**：规则调整通过 `kernel_log` 表持久化，可追溯版本演进
@@ -42,7 +43,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 5 组确定性回归脚本（44 + 8 + 15 + 47 + 124 = 238 断言） |
+| 校验 | 5 组确定性回归脚本（44 + 8 + 15 + 47 + 130 = 244 断言） |
 
 ---
 
@@ -89,14 +90,14 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（238 断言）
+# 全量回归（244 断言）
 npm run verify -w @fate/server
 
 # 分块验证
 npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时边界（8 用例）
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆（15 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（47 断言，含深度模式差异）
-npm run verify:api -w @fate/server  # 接口层（124 断言，内存 SQLite + inject）
+npm run verify:api -w @fate/server  # 接口层（130 断言，内存 SQLite + inject，含取消订单/过期清理/模式筛选）
 
 # 前端单元测试（纯函数层：白话导读 / 精度映射）
 npm run test -w @fate/web
@@ -132,7 +133,7 @@ npm run test -w @fate/web
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/v1/calculate` | 发起测算，写入记录 + 七级改运计划 + 风险项；body 可选 `calcType`（standard/quantum/ultimate） |
-| GET | `/api/v1/records` | 测算记录列表（分页可选，不含内部字段） |
+| GET | `/api/v1/records` | 测算记录列表（分页可选，支持 `calcType` 深度模式筛选） |
 | GET | `/api/v1/records/:id` | 报告详情（未解锁时 L4–L9 为 `locked`） |
 | GET | `/api/v1/records/:id/plans` | 七级改运计划（未解锁返回空数据） |
 | GET | `/api/v1/records/:id/risks` | 风险项（L5 卡点 + L6 分叉点） |
@@ -149,6 +150,7 @@ npm run test -w @fate/web
 |------|------|------|
 | POST | `/api/v1/orders` | 创建解锁订单（¥99） |
 | POST | `/api/v1/orders/:id/pay` | 支付解锁（渠道白名单校验） |
+| POST | `/api/v1/orders/:id/cancel` | 取消待支付订单（pending→expired；已支付 400、已过期/不存在 410） |
 | GET | `/api/v1/orders` | 我的订单历史（倒序，含关联测算摘要） |
 | GET | `/api/v1/orders/status/:recordId` | 订单状态查询 |
 
@@ -161,7 +163,7 @@ npm run test -w @fate/web
 ### 其他
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/health` | 健康检查 |
+| GET | `/api/health` | 健康检查（`layers` 返回各测算层版本数组） |
 | GET | `/api/v1/locations/search?q=` | 城市经纬度搜索（query 截断 ≤20） |
 
 ---
@@ -174,10 +176,12 @@ fate-engine/
 │   ├── server/
 │   │   ├── scripts/          # verify_all/l1/l2/l3/api 回归脚本
 │   │   └── src/
-│   │       ├── index.ts      # 入口（生产 FATE_SECRET 强校验）
-│   │       ├── app.ts        # Fastify 组装 + 统一错误处理
+│   │       ├── index.ts      # 入口（生产 FATE_SECRET 强校验；启动/停机挂载订单过期清理任务）
+│   │       ├── app.ts        # Fastify 组装 + 统一错误处理 + 健康检查
+│   │       ├── config.ts     # zod envSchema 强校验环境变量（非法值启动即拒绝）
 │   │       ├── schema.ts     # zod 输入校验
 │   │       ├── routes/       # auth/archives/calculate/orders/plans/kernel/stats
+│   │       ├── jobs/         # expireOrders.ts 订单过期批量清理定时任务（60s + timer.unref）
 │   │       ├── modules/
 │   │       │   ├── l1/       # 时空校正（dst 夏令时 / location / time / rating）
 │   │       │   ├── l2/       # 八字双流派
@@ -189,9 +193,10 @@ fate-engine/
 │   │       └── report.ts     # 九层报告聚合
 │   └── web/
 │       └── src/
-│           ├── api/          # client.ts（15s 超时、401 全局登出事件）
+│           ├── api/          # client.ts（15s 超时、401 全局登出事件、cancelOrder）
+│           ├── components/   # Skeleton 骨架屏 / ErrorBoundary / 登录面板 / 表格
 │           ├── layers.ts     # 九层骨架/提示文案
-│           └── pages/        # Input / Loading / Report / History
+│           └── pages/        # Input / Loading / Report / History（订单取消、骨架加载态）
 │               └── report/   # 九层组件与导出逻辑（layers.tsx）
 └── package.json              # npm workspaces
 ```
@@ -211,6 +216,8 @@ fate-engine/
 - **越权防护**：档案删除级联、记录列表 JOIN 均带 `user_id` 过滤；他人资源返回 404
 - **事务一致性**：测算写入（记录 + 计划 + 风险）由外层单一事务包裹，禁止嵌套事务
 - **数据访问分层**：SQL 读写全部收敛到 `db/repo/` Repository 层，路由层只做鉴权、校验与编排；模块层（L1–L9）保持纯计算，落库行映射（`toPlanRows` / `toRiskRows`）由模块层导出
+- **业务错误收敛**：路由统一 `throw ApiError`（`lib/errors.ts`），由全局错误处理器转 `ApiResp`；`lib/http.ts` 提供 `assertSchema` / `requireIdParam` 消除样板
+- **后台任务**：订单过期清理由 `src/jobs/expireOrders.ts` 承担（启动先清一轮 + 60s 定时，`timer.unref` 不阻塞进程退出，优雅停机时清除）
 - **可观测性**：`X-Request-Id` 全链路回显（UUID），访问日志与错误日志带 requestId 与路径；5xx 记录完整堆栈、4xx 记录告警，客户端仅收到收敛文案
 - **缓存策略**：鉴权/动态数据接口统一 `Cache-Control: no-store`，防止敏感数据进入代理缓存
 
