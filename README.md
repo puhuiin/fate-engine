@@ -97,6 +97,9 @@ npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时边界（8 �
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆（15 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（47 断言，含深度模式差异）
 npm run verify:api -w @fate/server  # 接口层（120 断言，内存 SQLite + inject）
+
+# 前端单元测试（纯函数层：白话导读 / 精度映射）
+npm run test -w @fate/web
 ```
 
 断言覆盖真实业务基准：如 `2002-11-29 20:40 北京男` → 真太阳时 20.604、戌时、日主辛/金、日柱辛丑、L4 事业 68。
