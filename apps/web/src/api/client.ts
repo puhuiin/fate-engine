@@ -232,6 +232,7 @@ export interface L6Result {
     decisionB: string;
     pathB: string;
   }>;
+  depthWindows?: Array<{ line: string; windows: string[] }>;
   note: string;
 }
 

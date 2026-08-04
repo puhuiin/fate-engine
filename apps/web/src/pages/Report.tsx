@@ -36,6 +36,7 @@ export default function Report() {
   const [l8, setL8] = useState<L8Result | null>(null);
   const [l9, setL9] = useState<L9Result | null>(null);
   const [paidStatus, setPaidStatus] = useState(0);
+  const [calcType, setCalcType] = useState('standard');
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [risks, setRisks] = useState<RiskItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +60,7 @@ export default function Report() {
     setL8(r?.l8 ?? null);
     setL9(r?.l9 ?? null);
     setPaidStatus(res.data?.paidStatus ?? 0);
+    if (res.data?.calc_type) setCalcType(String(res.data.calc_type));
     setLoadError('');
     return res;
   }, [recordId]);
@@ -202,6 +204,9 @@ export default function Report() {
         <p className="hint">
           九层输出结构（PRD 规格）。基础层免费，深度层（L4-L9）付费解锁
           {paidStatus === 1 ? '，当前已解锁全量报告。' : '。'}
+          <span className={`pill calc-badge ${calcType}`}>
+            {calcType === 'quantum' ? '量子展开' : calcType === 'ultimate' ? '终极演算' : '标准测算'}
+          </span>
         </p>
         <button type="button" className="ghost export-btn" onClick={exportText}>
           {copied ? '已复制报告 ✓' : '复制报告文本'}

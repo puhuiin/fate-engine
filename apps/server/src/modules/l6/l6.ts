@@ -31,9 +31,18 @@ export interface L6Output {
   lines: ParallelLine[];
   branchPoints: BranchPoint[];
   note: string;
+  /** 仅深度模式（quantum/ultimate）输出：各条线未来行运窗口提示 */
+  depthWindows?: Array<{ line: string; windows: string[] }>;
 }
 
-export function runL6(bazi: BaziResult, l4: L4Output, l5: L5Output): L6Output {
+export type L6Depth = 'standard' | 'quantum' | 'ultimate';
+
+export function runL6(
+  bazi: BaziResult,
+  l4: L4Output,
+  l5: L5Output,
+  depth: L6Depth = 'standard',
+): L6Output {
   const wc = bazi.wuxingCount;
   const countOf = (name: string) => bazi.shishenStats.find((s) => s.name === name)?.count ?? 0;
   const socialScore = l4.dimensions.find((d) => d.key === 'social')?.renwei ?? 55;
@@ -85,10 +94,11 @@ export function runL6(bazi: BaziResult, l4: L4Output, l5: L5Output): L6Output {
     },
   ];
 
-  // 分叉点：按后续大运转换年份生成
+  // 分叉点：按后续大运转换年份生成。深度模式分叉点更密（quantum=5 步、ultimate=全部）
   const future = bazi.daYun.filter((d) => d.index > (bazi.currentDaYun?.index ?? 0));
   const top = [...lines].sort((a, b) => b.fit - a.fit);
-  const branchPoints: BranchPoint[] = future.slice(0, 3).map((dy) => ({
+  const branchDepth = depth === 'ultimate' ? future.length : depth === 'quantum' ? 5 : 3;
+  const branchPoints: BranchPoint[] = future.slice(0, branchDepth).map((dy) => ({
     age: dy.startAge,
     year: dy.startYear,
     context: `进入「${dy.ganzhi}」大运（${dy.startAge}岁起，${dy.startYear}-${dy.endYear}）`,
@@ -98,9 +108,21 @@ export function runL6(bazi: BaziResult, l4: L4Output, l5: L5Output): L6Output {
     pathB: top[1]?.name ?? '破局线 · 开创者',
   }));
 
+  // 深度模式附加：每条线的后续行运窗口（把大运转换年映射到各线契合策略）
+  const depthWindows: L6Output['depthWindows'] =
+    depth === 'standard'
+      ? undefined
+      : lines.map((ln) => ({
+          line: ln.name,
+          windows: future
+            .slice(0, depth === 'quantum' ? 3 : 5)
+            .map((dy) => `${dy.startYear}-${dy.endYear}（${dy.ganzhi}）`),
+        }));
+
   return {
     lines,
     branchPoints,
-    note: `多线说明：四条线只是「可能的路径」，权重取决于你在每个分叉点的行动与投入，而非先天注定。${l5.mainKnot}是当前最需要留意的变量，无论走哪条线，先把它纳入你的刻意练习清单。`,
+    depthWindows,
+    note: `多线说明：四条线只是「可能的路径」，权重取决于你在每个分叉点的行动与投入，而非先天注定。${l5.mainKnot}是当前最需要留意的变量，无论走哪条线，先把它纳入你的刻意练习清单。${depth !== 'standard' ? `深度模式已展开 ${branchPoints.length} 个分叉点并附各行运窗口，供长期规划参考。` : ''}`,
   };
 }

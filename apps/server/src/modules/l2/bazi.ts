@@ -118,11 +118,12 @@ export function buildBazi(
 
   const birthYear = clockTime.getUTCFullYear();
 
-  // 大运（前 5 步）：起运按分钟精度（3 天折 1 年，sect=2），与排盘流派一致
+  // 大运（前 8 步）：起运按分钟精度（3 天折 1 年，sect=2），与排盘流派一致
+  // 覆盖至约 80 岁，为 L6 量子多线的深度分叉展开提供足够窗口
   const yun = bz.getYun(gender === 'female' ? 0 : 1, 2);
-  const rawDaYun = yun.getDaYun(6);
+  const rawDaYun = yun.getDaYun(10);
   const daYun: DaYunItem[] = rawDaYun
-    .slice(1, 6)
+    .slice(1, 9)
     .filter((d) => d.getGanZhi())
     .map((d) => ({
       index: d.getIndex(),

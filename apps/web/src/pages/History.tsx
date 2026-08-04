@@ -20,6 +20,7 @@ import {
 interface RecordRow {
   id: number;
   archive_id: number;
+  calc_type?: string;
   solar_date: string;
   solar_time: string | null;
   city_name: string | null;
@@ -358,6 +359,15 @@ export default function History() {
                       {r.solar_time ? ` ${r.solar_time.slice(0, 5)}` : ''}
                     </td>
                     <td>{r.city_name ?? '-'}</td>
+                    <td>
+                      <span className={`pill calc-badge ${r.calc_type}`}>
+                        {r.calc_type === 'quantum'
+                          ? '量子'
+                          : r.calc_type === 'ultimate'
+                            ? '终极'
+                            : '标准'}
+                      </span>
+                    </td>
                     <td>
                       <span className={`paid-tag ${r.paid_status === 1 ? 'pro' : 'free'}`}>
                         {r.paid_status === 1 ? '深度版' : '基础版'}

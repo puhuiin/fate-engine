@@ -229,6 +229,68 @@ body {
   color: #8a7b5c;
 }
 
+/* 测算模式选择 */
+.calc-type-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.calc-type {
+  border: 1px solid #e0d4b6;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #fff;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.calc-type input {
+  position: absolute;
+  opacity: 0;
+}
+
+.calc-type strong {
+  font-size: 14px;
+  color: #5a4a26;
+}
+
+.calc-type span {
+  font-size: 12px;
+  color: #8a7b5c;
+  line-height: 1.4;
+}
+
+.calc-type.selected {
+  border-color: var(--gold);
+  background: #faf4e4;
+}
+
+@media (max-width: 560px) {
+  .calc-type-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 测算模式徽标 */
+.calc-badge {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.calc-badge.quantum {
+  background: #6c5ce7;
+  color: #fff;
+}
+
+.calc-badge.ultimate {
+  background: #b8860b;
+  color: #fff;
+}
+
 /* 昵称内联编辑 */
 .nick-input {
   border: 1px solid #d8cba6;

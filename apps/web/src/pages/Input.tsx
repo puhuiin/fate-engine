@@ -31,6 +31,24 @@ const GENDERS = [
   { value: 'other', label: '其他/保密' },
 ];
 
+const CALC_TYPES = [
+  {
+    value: 'standard',
+    label: '标准测算',
+    desc: '九层全量报告 + 3 个关键分叉点',
+  },
+  {
+    value: 'quantum',
+    label: '量子展开',
+    desc: '分叉点展开至 5 个，附各行运窗口',
+  },
+  {
+    value: 'ultimate',
+    label: '终极演算',
+    desc: '全生命周期分叉点 + 完整行运窗口',
+  },
+];
+
 const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
   .toISOString()
   .slice(0, 10);
@@ -47,6 +65,7 @@ export default function Input() {
   const [cityQuery, setCityQuery] = useState('');
   const [cities, setCities] = useState<City[]>([]);
   const [city, setCity] = useState<City | null>(null);
+  const [calcType, setCalcType] = useState('standard');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
@@ -134,7 +153,7 @@ export default function Input() {
       const archive = editId
         ? await updateArchive(editId, payload)
         : await createArchive(payload);
-      const calc = await calculate(archive.data.id, 'standard');
+      const calc = await calculate(archive.data.id, calcType);
       navigate('/loading', { state: { recordId: calc.data.recordId } });
     } catch (e) {
       setError(e instanceof Error ? e.message : '测算失败，请重试');
@@ -210,6 +229,28 @@ export default function Input() {
                 onChange={() => setGender(g.value)}
               />
               {g.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="field">
+        <span>测算模式</span>
+        <div className="calc-type-row">
+          {CALC_TYPES.map((c) => (
+            <label
+              key={c.value}
+              className={`calc-type ${calcType === c.value ? 'selected' : ''}`}
+            >
+              <input
+                type="radio"
+                name="calcType"
+                value={c.value}
+                checked={calcType === c.value}
+                onChange={() => setCalcType(c.value)}
+              />
+              <strong>{c.label}</strong>
+              <span>{c.desc}</span>
             </label>
           ))}
         </div>

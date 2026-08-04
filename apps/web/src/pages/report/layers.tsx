@@ -720,6 +720,22 @@ export function Layer6({ l6, risks }: { l6: L6Result; risks: RiskItem[] }) {
           </tbody>
         </table>
       </section>
+      {l6.depthWindows && l6.depthWindows.length > 0 && (
+        <section>
+          <h3>各线行运窗口（深度模式）</h3>
+          <p className="dim">把后续大运转换年份映射到四条线的节奏参考，用于长期规划。</p>
+          <ul className="risk-list">
+            {l6.depthWindows.map((w, i) => (
+              <li key={i} className="risk-item">
+                <div className="risk-head">
+                  <span className="risk-level">{w.line}</span>
+                </div>
+                <p className="risk-trigger">{w.windows.join(' → ')}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {risks.length > 0 && (
         <section>
           <h3>已知风险提示</h3>

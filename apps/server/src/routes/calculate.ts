@@ -69,7 +69,7 @@ export function calculateRoutes(app: FastifyInstance, db: Db): void {
       l3 = runL3(l2.bazi);
       l4 = runL4(l2.bazi);
       l5 = runL5(l2.bazi);
-      l6 = runL6(l2.bazi, l4, l5);
+      l6 = runL6(l2.bazi, l4, l5, calcType);
       l7 = runL7(l1, l2, l4, l5);
       l8 = runL8(l4, l5, l2.bazi);
       l9 = runL9(l2.bazi, l4, l5, l7);
