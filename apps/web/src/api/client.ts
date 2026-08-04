@@ -14,6 +14,29 @@ export const AUTH_CHANGED_EVENT = 'fate:auth-changed';
 /** 请求超时（毫秒），防止网络挂起导致界面无限 loading */
 const REQUEST_TIMEOUT = 15000;
 
+/** 幂等请求（GET/HEAD）网络失败自动重试次数（不计首次）；非幂等请求不重试，避免重复提交 */
+const RETRY_MAX = 2;
+const RETRY_BASE_MS = 400;
+
+async function fetchWithRetry(path: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  let attempt = 0;
+  const maxAttempts = !init.method || init.method === 'GET' || init.method === 'HEAD' ? RETRY_MAX + 1 : 1;
+  while (true) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(path, { ...init, signal: ctrl.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      attempt += 1;
+      if (attempt >= maxAttempts) throw err;
+      await new Promise((r) => setTimeout(r, RETRY_BASE_MS * 2 ** (attempt - 1)));
+    }
+  }
+}
+
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) || '';
 }
@@ -30,11 +53,9 @@ export function clearToken(): void {
 
 async function request<T>(path: string, options?: RequestInit): Promise<ApiResp<T>> {
   const token = getToken();
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT);
   let res: Response;
   try {
-    res = await fetch(path, {
+    res = await fetchWithRetry(path, {
       method: options?.method,
       body: options?.body,
       headers: {
@@ -42,12 +63,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<ApiResp<
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options?.headers ?? {}),
       },
-      signal: ctrl.signal,
-    });
+    }, REQUEST_TIMEOUT);
   } catch {
     throw new Error('网络请求超时或失败，请稍后重试');
-  } finally {
-    clearTimeout(timer);
   }
   const ct = res.headers.get('content-type') || '';
   if (!ct.includes('application/json')) {

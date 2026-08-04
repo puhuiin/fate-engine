@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { NavLink, Route, Routes, Link } from 'react-router-dom';
-import Input from './pages/Input';
-import Loading from './pages/Loading';
-import Report from './pages/Report';
-import History from './pages/History';
+import ErrorBoundary from './components/ErrorBoundary';
 import { AUTH_CHANGED_EVENT, getMe } from './api/client';
+
+const Input = lazy(() => import('./pages/Input'));
+const Loading = lazy(() => import('./pages/Loading'));
+const Report = lazy(() => import('./pages/Report'));
+const History = lazy(() => import('./pages/History'));
 
 export default function App() {
   const [user, setUser] = useState<{ phone_masked: string | null; nickname: string } | null>(null);
@@ -43,13 +45,17 @@ export default function App() {
         </span>
       </header>
       <main className="content">
-        <Routes>
-          <Route path="/" element={<Input />} />
-          <Route path="/edit/:id" element={<Input />} />
-          <Route path="/loading" element={<Loading />} />
-          <Route path="/report/:id" element={<Report />} />
-          <Route path="/history" element={<History />} />
-        </Routes>
+        <ErrorBoundary>
+          <Suspense fallback={<div className="card">加载中…</div>}>
+            <Routes>
+              <Route path="/" element={<Input />} />
+              <Route path="/edit/:id" element={<Input />} />
+              <Route path="/loading" element={<Loading />} />
+              <Route path="/report/:id" element={<Report />} />
+              <Route path="/history" element={<History />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </main>
     </div>
   );
