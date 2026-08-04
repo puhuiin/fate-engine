@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "concurrently -n server,web -c blue,green \"npm run dev -w @fate/server\" \"npm run dev -w @fate/web\"",
     "build": "npm run build -w @fate/server && npm run build -w @fate/web",
-    "start": "npm run start -w @fate/server"
+    "start": "npm run start -w @fate/server",
+    "lint": "npm run lint -w @fate/server && npm run lint -w @fate/web",
+    "verify": "npm run verify -w @fate/server && npm run test -w @fate/web"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

@@ -30,7 +30,8 @@ export function createPlanRepo(db: Db) {
            JOIN calculate_record r ON p.record_id = r.id
            WHERE p.id = ? AND r.user_id = ?`,
         )
-        .get(planId, userId) as (Record<string, unknown> & { id: number; paid_status: number }) | undefined;
+        .get(planId, userId) as
+        (Record<string, unknown> & { id: number; paid_status: number }) | undefined;
     },
     updateStatus(id: number, status: string): void {
       db.prepare(
@@ -40,7 +41,10 @@ export function createPlanRepo(db: Db) {
       ).run(status, status, id);
     },
     appendNote(id: number, note: string): void {
-      db.prepare('UPDATE luck_plan SET content = content || char(10) || ? WHERE id = ?').run(note, id);
+      db.prepare('UPDATE luck_plan SET content = content || char(10) || ? WHERE id = ?').run(
+        note,
+        id,
+      );
     },
     findById<T = Record<string, unknown>>(id: number) {
       return db.prepare('SELECT * FROM luck_plan WHERE id = ?').get(id) as T | undefined;

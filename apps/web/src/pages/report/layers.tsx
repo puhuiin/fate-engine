@@ -1,4 +1,14 @@
-import type { L1Result, L2Result, L3Result, L4Result, L5Result, L6Result, L7Result, L8Result, L9Result } from '../../api/client';
+import type {
+  L1Result,
+  L2Result,
+  L3Result,
+  L4Result,
+  L5Result,
+  L6Result,
+  L7Result,
+  L8Result,
+  L9Result,
+} from '../../api/client';
 import type { PlanItem, RiskItem } from '../../api/client';
 import { GLOSSARY_L1, GLOSSARY_L2, PlainGlossary, TermPlain } from './plain';
 import { fmtHour } from './exportText';
@@ -40,7 +50,8 @@ export function Layer1({ l1 }: { l1: L1Result }) {
                 <span className="dim">
                   {' '}
                   （
-                  <TermPlain term="平太阳时" plain="不修正经度、直接用标准时区的钟表时间" /> {fmtHour(t.meanSolarHours)} ·{' '}
+                  <TermPlain term="平太阳时" plain="不修正经度、直接用标准时区的钟表时间" />{' '}
+                  {fmtHour(t.meanSolarHours)} ·{' '}
                   <TermPlain term="均时差" plain="地球公转轨道不圆导致的日常钟表偏差" />{' '}
                   {t.equationOfTimeMinutes.toFixed(1)} 分钟 · 总校正{' '}
                   {(t.totalOffsetMinutes ?? t.offsetMinutes) > 0 ? '+' : ''}
@@ -61,14 +72,14 @@ export function Layer1({ l1 }: { l1: L1Result }) {
         </table>
       </section>
 
-          {l1.dstAdjustment?.applied && (
-            <section>
-              <h3>夏令时校正（1986-1991）</h3>
-              <div className="grade grade-b">
-                <p>{l1.dstAdjustment.note}</p>
-              </div>
-            </section>
-          )}
+      {l1.dstAdjustment?.applied && (
+        <section>
+          <h3>夏令时校正（1986-1991）</h3>
+          <div className="grade grade-b">
+            <p>{l1.dstAdjustment.note}</p>
+          </div>
+        </section>
+      )}
 
       <section>
         <h3>农历与干支</h3>
@@ -83,8 +94,8 @@ export function Layer1({ l1 }: { l1: L1Result }) {
                 <TermPlain term="四柱" plain="年、月、日、时四组干支坐标" />
               </td>
               <td>
-                年 {l1.lunar.yearGanZhi} · 月 {l1.lunar.monthGanZhi} · 日 {l1.lunar.dayGanZhi} ·
-                时 {l1.lunar.timeGanZhi}
+                年 {l1.lunar.yearGanZhi} · 月 {l1.lunar.monthGanZhi} · 日 {l1.lunar.dayGanZhi} · 时{' '}
+                {l1.lunar.timeGanZhi}
               </td>
             </tr>
             <tr>
@@ -102,7 +113,9 @@ export function Layer1({ l1 }: { l1: L1Result }) {
       <section>
         <h3>误差公示</h3>
         <div className={`grade grade-${l1.rating.grade.toLowerCase()}`}>
-          <strong>误差等级 {l1.rating.grade} · 置信度 {l1.rating.confidence}%</strong>
+          <strong>
+            误差等级 {l1.rating.grade} · 置信度 {l1.rating.confidence}%
+          </strong>
           <p>{l1.rating.message}</p>
           {l1.rating.suggest.length > 0 && (
             <ul>
@@ -112,7 +125,9 @@ export function Layer1({ l1 }: { l1: L1Result }) {
             </ul>
           )}
           {l1.boundaryRisk && (
-            <p className="warn">本次校正检测到交节/换日边界风险，时辰与日柱结论请以多版本比对为准。</p>
+            <p className="warn">
+              本次校正检测到交节/换日边界风险，时辰与日柱结论请以多版本比对为准。
+            </p>
           )}
         </div>
       </section>
@@ -137,13 +152,12 @@ type PillarRow = {
 
 export function Layer2({ l2 }: { l2: L2Result }) {
   const bazi = l2.bazi;
-  const pillars = (l2.schools.find((s) => s.school === '八字命理')?.data as
-    | { pillars: PillarRow[] }
-    | undefined)?.pillars;
+  const pillars = (
+    l2.schools.find((s) => s.school === '八字命理')?.data as { pillars: PillarRow[] } | undefined
+  )?.pillars;
   const nayinSchool = l2.schools.find((s) => s.school === '纳音五行论命');
   const nayinData = nayinSchool?.data as
-    | { yearNaYin: string; dayNaYin: string; dayNaYinWuXing: string; profile: string }
-    | undefined;
+    { yearNaYin: string; dayNaYin: string; dayNaYinWuXing: string; profile: string } | undefined;
 
   return (
     <div className="l2-report">
@@ -176,7 +190,15 @@ export function Layer2({ l2 }: { l2: L2Result }) {
             {pillars ? (
               pillars.map((p) => (
                 <tr key={p.position}>
-                  <td>{p.position === 'year' ? '年' : p.position === 'month' ? '月' : p.position === 'day' ? '日' : '时'}</td>
+                  <td>
+                    {p.position === 'year'
+                      ? '年'
+                      : p.position === 'month'
+                        ? '月'
+                        : p.position === 'day'
+                          ? '日'
+                          : '时'}
+                  </td>
                   <td className="strong">{p.ganzhi}</td>
                   <td>{p.wuxing}</td>
                   <td>{p.nayin}</td>
@@ -188,7 +210,9 @@ export function Layer2({ l2 }: { l2: L2Result }) {
               ))
             ) : (
               <tr>
-                <td colSpan={8} className="dim">暂无四柱数据</td>
+                <td colSpan={8} className="dim">
+                  暂无四柱数据
+                </td>
               </tr>
             )}
           </tbody>
@@ -243,7 +267,10 @@ export function Layer2({ l2 }: { l2: L2Result }) {
           </p>
           <div className="dayun-list">
             {bazi.daYun.map((d) => (
-              <span key={d.index} className={`dayun-item ${d.index === bazi.currentDaYun?.index ? 'active' : ''}`}>
+              <span
+                key={d.index}
+                className={`dayun-item ${d.index === bazi.currentDaYun?.index ? 'active' : ''}`}
+              >
                 {d.ganzhi}（{d.startAge}岁 · {d.startYear}-{d.endYear}）
               </span>
             ))}
@@ -530,7 +557,10 @@ export function Layer8({
           <>
             <div className="checkin-progress">
               <div className="bar-track">
-                <span className="bar-fill" style={{ width: `${(doneCount / plans.length) * 100}%` }} />
+                <span
+                  className="bar-fill"
+                  style={{ width: `${(doneCount / plans.length) * 100}%` }}
+                />
               </div>
               <span className="dim">
                 已完成 {doneCount}/{plans.length}
@@ -639,7 +669,9 @@ export function Layer6({ l6, risks }: { l6: L6Result; risks: RiskItem[] }) {
       {risks.length > 0 && (
         <section>
           <h3>已知风险提示</h3>
-          <p className="dim">源自卡点溯源（L5）与分叉点（L6）的落库风险项，按风险级别从高到低排列。</p>
+          <p className="dim">
+            源自卡点溯源（L5）与分叉点（L6）的落库风险项，按风险级别从高到低排列。
+          </p>
           <ul className="risk-list">
             {risks.map((r) => (
               <li key={r.id} className={`risk-item risk-lv${r.risk_level}`}>

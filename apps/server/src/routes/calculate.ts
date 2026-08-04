@@ -62,7 +62,11 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
         timezoneOffset: archive.timezone_offset ?? 8,
       });
 
-      l2 = runL2(l1.timeCorrection.trueSolarClockTime, archive.gender ?? 'other', l1.normalized.timeKnown);
+      l2 = runL2(
+        l1.timeCorrection.trueSolarClockTime,
+        archive.gender ?? 'other',
+        l1.normalized.timeKnown,
+      );
       l3 = runL3(l2.bazi);
       l4 = runL4(l2.bazi);
       l5 = runL5(l2.bazi);
@@ -71,13 +75,20 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
       l8 = runL8(l4, l5, l2.bazi);
       l9 = runL9(l2.bazi, l4, l5, l7);
     } catch (e) {
-      return reply.send(fail(400, e instanceof Error ? e.message : '出生信息不合法，请重新编辑档案'));
+      return reply.send(
+        fail(400, e instanceof Error ? e.message : '出生信息不合法，请重新编辑档案'),
+      );
     }
 
     const report = buildNineLayerReport(l1, l2, l3, l4, l5, l6, l7, l8, l9);
 
     const tx = repos.db.transaction(() => {
-      const recordId = repos.records.insert(archiveId, req.userId, calcType, JSON.stringify({ l1, l2, l3, l4, l5, l6, l7, l8, l9 }));
+      const recordId = repos.records.insert(
+        archiveId,
+        req.userId,
+        calcType,
+        JSON.stringify({ l1, l2, l3, l4, l5, l6, l7, l8, l9 }),
+      );
       repos.plans.insertBatch(recordId, toPlanRows(l8));
       repos.risks.insertBatch(recordId, toRiskRows(l5, l6));
       return recordId;
@@ -104,7 +115,7 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
     }
-    const record = repos.records.findById<(Record<string, unknown> & { raw_json: string | null })>(
+    const record = repos.records.findById<Record<string, unknown> & { raw_json: string | null }>(
       id,
       req.userId,
     );
@@ -158,7 +169,7 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 测算历史列表（可选分页：page/pageSize，缺省时返回全部保持兼容） */
-  app.get('/api/v1/records', { preHandler: app.authenticate }, async (req, reply) => {
+  app.get('/api/v1/records', { preHandler: app.authenticate }, async (req) => {
     const query = req.query as { page?: string; pageSize?: string };
     const clampInt = (v: unknown, fallback: number, max: number): number => {
       const n = Number(v);

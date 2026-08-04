@@ -1,6 +1,10 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Db } from './db/client.js';
 import { createRepos } from './db/repo/index.js';
 import { config } from './config.js';
@@ -49,7 +53,10 @@ const AUTH_RATE_MAX = config.authRateMax;
 function parseCorsOrigins(): string[] | null {
   const raw = process.env.CORS_ORIGIN;
   if (!raw) return null;
-  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function parseTrustProxy(): boolean | number | undefined {
@@ -58,6 +65,24 @@ function parseTrustProxy(): boolean | number | undefined {
   const n = Number(raw);
   if (Number.isFinite(n) && n > 0) return n;
   return raw === '1' || raw === 'true';
+}
+
+/**
+ * 生产静态托管目录：优先 WEB_DIST_DIR 环境变量，否则回退到前端构建产物
+ * （apps/web/dist，Docker 镜像内已合并）。
+ */
+function resolveWebDist(): string | null {
+  const env = process.env.WEB_DIST_DIR;
+  if (env && fs.existsSync(env)) return path.resolve(env);
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(here, '../../web/dist'),
+    path.resolve(here, '../../../web/dist'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, 'index.html'))) return c;
+  }
+  return null;
 }
 
 export function buildApp(db: Db, opts: BuildAppOpts = {}) {
@@ -94,7 +119,8 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   app.decorate('authenticate', authenticate);
 
   /** 请求计时：onResponse 输出耗时与慢请求告警，供性能回归与生产定位 */
-  const SLOW_MS = Number(process.env.SLOW_REQUEST_MS) > 0 ? Number(process.env.SLOW_REQUEST_MS) : 800;
+  const SLOW_MS =
+    Number(process.env.SLOW_REQUEST_MS) > 0 ? Number(process.env.SLOW_REQUEST_MS) : 800;
   app.addHook('onResponse', async (req, reply) => {
     const ms = reply.elapsedTime ?? 0;
     const base = {
@@ -134,16 +160,28 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     } else {
       req.log.warn({ err, path: req.url }, '请求被拒绝');
     }
-    reply.code(status).send(
-      fail(status, status >= 500 ? '服务器开小差了，请稍后重试' : e.message ?? '请求处理失败'),
-    );
+    reply
+      .code(status)
+      .send(
+        fail(status, status >= 500 ? '服务器开小差了，请稍后重试' : (e.message ?? '请求处理失败')),
+      );
   });
 
-  /** 未知 API 路由统一返回 ApiResp 结构（而非 Fastify 默认纯文本 404） */
+  /** 未知 API 路由统一返回 ApiResp 结构（而非 Fastify 默认纯文本 404）；非 API 路径回退到前端 SPA index.html */
+  const webDist = resolveWebDist();
+  if (webDist) {
+    app.register(fastifyStatic, { root: webDist, prefix: '/', wildcard: false });
+    app.log.info({ dir: webDist }, '已托管前端静态资源');
+  } else {
+    app.log.warn('未找到前端构建产物，仅提供 API 服务');
+  }
   app.setNotFoundHandler(async (req, reply) => {
-    const path = req.url.split('?')[0];
-    if (path.startsWith('/api')) {
-      return reply.code(404).send(fail(404, `接口不存在：${path}`));
+    const pathname = req.url.split('?')[0];
+    if (pathname.startsWith('/api')) {
+      return reply.code(404).send(fail(404, `接口不存在：${pathname}`));
+    }
+    if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {
+      return reply.type('text/html').send(fs.readFileSync(path.join(webDist, 'index.html')));
     }
     return reply.code(404).send({ code: 404, msg: 'Not Found', data: null });
   });
@@ -170,7 +208,9 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     try {
       db.prepare('SELECT 1 AS ok').get();
       const sizeRow = db
-        .prepare('SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()')
+        .prepare(
+          'SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()',
+        )
         .get() as { bytes?: number };
       dbSizeBytes = Number(sizeRow?.bytes) || 0;
     } catch {
@@ -193,7 +233,9 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
 
   /** L1 城市检索（前端录入页自动补全） */
   app.get('/api/v1/locations/search', async (req) => {
-    const q = String((req.query as { q?: string }).q ?? '').trim().slice(0, 20);
+    const q = String((req.query as { q?: string }).q ?? '')
+      .trim()
+      .slice(0, 20);
     return ok(searchCities(q));
   });
 
@@ -202,7 +244,9 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   authRoutes(
     app,
     repos,
-    opts.rateLimit === false ? undefined : createRateLimitHook({ max: AUTH_RATE_MAX, windowMs: RATE_WINDOW_MS }),
+    opts.rateLimit === false
+      ? undefined
+      : createRateLimitHook({ max: AUTH_RATE_MAX, windowMs: RATE_WINDOW_MS }),
   );
   archiveRoutes(app, repos);
   calculateRoutes(app, repos);

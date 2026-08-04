@@ -4,7 +4,7 @@ import { config } from '../config.js';
 import { fail, maskPhone, ok, signToken, verifyToken } from '../lib/util.js';
 import { createRateLimitHook } from '../lib/rateLimit.js';
 import { guestSchema, phoneLoginSchema, sendSmsSchema } from '../schema.js';
-import { type Repos, USER_PUBLIC_COLS } from '../db/repo/index.js';
+import { type Repos } from '../db/repo/index.js';
 
 /** 同一验证码最多允许的错误尝试次数，超过则作废并要求重新获取 */
 const MAX_CODE_ATTEMPTS = config.maxCodeAttempts;
@@ -65,7 +65,7 @@ export function authRoutes(
     },
   );
 
-/** 手机号验证码登录 */
+  /** 手机号验证码登录 */
   app.post(
     '/api/v1/auth/phone',
     authRateLimit ? { onRequest: authRateLimit } : {},
@@ -93,7 +93,11 @@ export function authRoutes(
 
       let user = repos.users.findByPhone(phone);
       if (!user) {
-        const userId = repos.users.insertPhoneUser(phone, maskPhone(phone), nickname ?? `用户${phone.slice(-4)}`);
+        const userId = repos.users.insertPhoneUser(
+          phone,
+          maskPhone(phone),
+          nickname ?? `用户${phone.slice(-4)}`,
+        );
         user = repos.users.findById(userId);
       }
       if (!user) {
@@ -113,10 +117,9 @@ export function authRoutes(
             const rec = repos.db
               .prepare('UPDATE calculate_record SET user_id = ? WHERE user_id = ?')
               .run(user.id, guest.userId);
-            repos.db.prepare('UPDATE order_pay SET user_id = ? WHERE user_id = ?').run(
-              user.id,
-              guest.userId,
-            );
+            repos.db
+              .prepare('UPDATE order_pay SET user_id = ? WHERE user_id = ?')
+              .run(user.id, guest.userId);
             mergedArchives = Number(arch.changes);
             mergedRecords = Number(rec.changes);
           });
@@ -125,7 +128,11 @@ export function authRoutes(
       }
       return reply.send(
         ok(
-          { user, token: signToken(user.id), merged: { archives: mergedArchives, records: mergedRecords } },
+          {
+            user,
+            token: signToken(user.id),
+            merged: { archives: mergedArchives, records: mergedRecords },
+          },
           mergedRecords > 0 ? '登录成功，游客数据已合并' : '登录成功',
         ),
       );

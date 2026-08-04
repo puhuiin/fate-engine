@@ -21,7 +21,13 @@ export interface L5Output {
 }
 
 /** 十神过旺模式 */
-const SHISHEN_KNOTS: Array<{ name: string; keys: string[]; threshold: number; manifestation: string; root: string }> = [
+const SHISHEN_KNOTS: Array<{
+  name: string;
+  keys: string[];
+  threshold: number;
+  manifestation: string;
+  root: string;
+}> = [
   {
     name: '求认可与自我证明',
     keys: ['伤官'],
@@ -77,9 +83,21 @@ const SHISHEN_KNOTS: Array<{ name: string; keys: string[]; threshold: number; ma
 const WUXING_GAPS: Array<{ wx: string; name: string; manifestation: string }> = [
   { wx: '土', name: '落地与稳定感', manifestation: '想法活跃但落地执行、长期坚持需要刻意练习。' },
   { wx: '金', name: '规则与边界意识', manifestation: '随性灵活，但边界与流程感需要主动建立。' },
-  { wx: '水', name: '洞察与应变深度', manifestation: '直来直往，对他人情绪与局势变化的捕捉需要补课。' },
-  { wx: '木', name: '成长方向与破局', manifestation: '稳定性强，但主动探索与开辟新方向需要外力助推。' },
-  { wx: '火', name: '表达与行动力度', manifestation: '内心戏多于行动展示，主动表达与即时行动需要刻意练习。' },
+  {
+    wx: '水',
+    name: '洞察与应变深度',
+    manifestation: '直来直往，对他人情绪与局势变化的捕捉需要补课。',
+  },
+  {
+    wx: '木',
+    name: '成长方向与破局',
+    manifestation: '稳定性强，但主动探索与开辟新方向需要外力助推。',
+  },
+  {
+    wx: '火',
+    name: '表达与行动力度',
+    manifestation: '内心戏多于行动展示，主动表达与即时行动需要刻意练习。',
+  },
 ];
 
 export function runL5(bazi: BaziResult): L5Output {
@@ -123,7 +141,8 @@ export function runL5(bazi: BaziResult): L5Output {
   }
 
   // 主卡点：取第一个（优先级最高）
-  const mainKnot = patterns[0]?.name ?? '当前四柱结构相对均衡，无明显偏枯，卡点多来自环境与认知习惯。';
+  const mainKnot =
+    patterns[0]?.name ?? '当前四柱结构相对均衡，无明显偏枯，卡点多来自环境与认知习惯。';
 
   const resolutionPath = [
     `直面「${mainKnot}」：把它当作可训练的课题，而不是不可更改的属性。`,

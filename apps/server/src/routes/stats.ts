@@ -21,7 +21,8 @@ export function statsRoutes(app: FastifyInstance, repos: Repos): void {
       unlockRate: totalRecords > 0 ? Math.round((paidRecords / totalRecords) * 100) : 0,
       totalPlans,
       donePlans: Number(row.done_plans),
-      planCompletionRate: totalPlans > 0 ? Math.round((Number(row.done_plans) / totalPlans) * 100) : 0,
+      planCompletionRate:
+        totalPlans > 0 ? Math.round((Number(row.done_plans) / totalPlans) * 100) : 0,
       highRiskCount: Number(row.risk_count),
       lastRecordAt: row.last_record_at ?? null,
     });

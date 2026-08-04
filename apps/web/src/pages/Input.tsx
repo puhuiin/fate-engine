@@ -150,9 +150,7 @@ export default function Input() {
         longitude: city?.longitude,
         latitude: city?.latitude,
       };
-      const archive = editId
-        ? await updateArchive(editId, payload)
-        : await createArchive(payload);
+      const archive = editId ? await updateArchive(editId, payload) : await createArchive(payload);
       const calc = await calculate(archive.data.id, calcType);
       navigate('/loading', { state: { recordId: calc.data.recordId } });
     } catch (e) {
@@ -172,7 +170,9 @@ export default function Input() {
     >
       <h2>{editId ? '编辑生辰信息' : '录入生辰信息'}</h2>
       <p className="hint">
-        {editId ? '修改后将重新测算并生成新的报告，原记录保留可回溯。' : '用于时空校正层（L1）的真太阳时与误差评级，你的信息将脱敏存储。'}
+        {editId
+          ? '修改后将重新测算并生成新的报告，原记录保留可回溯。'
+          : '用于时空校正层（L1）的真太阳时与误差评级，你的信息将脱敏存储。'}
       </p>
 
       <label className="field">
@@ -190,7 +190,12 @@ export default function Input() {
       {timeVisible && (
         <label className="field">
           <span>出生时间（钟表时间）</span>
-          <input type="time" autoComplete="off" value={solarTime} onChange={(e) => setSolarTime(e.target.value)} />
+          <input
+            type="time"
+            autoComplete="off"
+            value={solarTime}
+            onChange={(e) => setSolarTime(e.target.value)}
+          />
         </label>
       )}
 
@@ -238,10 +243,7 @@ export default function Input() {
         <span>测算模式</span>
         <div className="calc-type-row">
           {CALC_TYPES.map((c) => (
-            <label
-              key={c.value}
-              className={`calc-type ${calcType === c.value ? 'selected' : ''}`}
-            >
+            <label key={c.value} className={`calc-type ${calcType === c.value ? 'selected' : ''}`}>
               <input
                 type="radio"
                 name="calcType"

@@ -6,8 +6,16 @@
 import { Solar } from 'lunar-javascript';
 
 const WUXING_GAN: Record<string, string> = {
-  甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土',
-  己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水',
+  甲: '木',
+  乙: '木',
+  丙: '火',
+  丁: '火',
+  戊: '土',
+  己: '土',
+  庚: '金',
+  辛: '金',
+  壬: '水',
+  癸: '水',
 };
 
 export interface PillarItem {
@@ -51,7 +59,17 @@ export interface BaziResult {
   sectNote: string;
 }
 
-function buildPillar(gan: string, zhi: string, ganZhi: string, wuxing: string, naYin: string, shishenGan: string, shishenZhi: string[], hideGan: string[], dishi: string): PillarItem {
+function buildPillar(
+  gan: string,
+  zhi: string,
+  ganZhi: string,
+  wuxing: string,
+  naYin: string,
+  shishenGan: string,
+  shishenZhi: string[],
+  hideGan: string[],
+  dishi: string,
+): PillarItem {
   return {
     ganzhi: ganZhi,
     gan,
@@ -84,10 +102,50 @@ export function buildBazi(
   bz.setSect(2);
 
   const pillars = {
-    year: buildPillar(bz.getYearGan(), bz.getYearZhi(), bz.getYear(), bz.getYearWuXing(), bz.getYearNaYin(), bz.getYearShiShenGan(), bz.getYearShiShenZhi(), bz.getYearHideGan(), bz.getYearDiShi()),
-    month: buildPillar(bz.getMonthGan(), bz.getMonthZhi(), bz.getMonth(), bz.getMonthWuXing(), bz.getMonthNaYin(), bz.getMonthShiShenGan(), bz.getMonthShiShenZhi(), bz.getMonthHideGan(), bz.getMonthDiShi()),
-    day: buildPillar(bz.getDayGan(), bz.getDayZhi(), bz.getDay(), bz.getDayWuXing(), bz.getDayNaYin(), bz.getDayShiShenGan(), bz.getDayShiShenZhi(), bz.getDayHideGan(), bz.getDayDiShi()),
-    time: buildPillar(bz.getTimeGan(), bz.getTimeZhi(), bz.getTime(), bz.getTimeWuXing(), bz.getTimeNaYin(), bz.getTimeShiShenGan(), bz.getTimeShiShenZhi(), bz.getTimeHideGan(), bz.getTimeDiShi()),
+    year: buildPillar(
+      bz.getYearGan(),
+      bz.getYearZhi(),
+      bz.getYear(),
+      bz.getYearWuXing(),
+      bz.getYearNaYin(),
+      bz.getYearShiShenGan(),
+      bz.getYearShiShenZhi(),
+      bz.getYearHideGan(),
+      bz.getYearDiShi(),
+    ),
+    month: buildPillar(
+      bz.getMonthGan(),
+      bz.getMonthZhi(),
+      bz.getMonth(),
+      bz.getMonthWuXing(),
+      bz.getMonthNaYin(),
+      bz.getMonthShiShenGan(),
+      bz.getMonthShiShenZhi(),
+      bz.getMonthHideGan(),
+      bz.getMonthDiShi(),
+    ),
+    day: buildPillar(
+      bz.getDayGan(),
+      bz.getDayZhi(),
+      bz.getDay(),
+      bz.getDayWuXing(),
+      bz.getDayNaYin(),
+      bz.getDayShiShenGan(),
+      bz.getDayShiShenZhi(),
+      bz.getDayHideGan(),
+      bz.getDayDiShi(),
+    ),
+    time: buildPillar(
+      bz.getTimeGan(),
+      bz.getTimeZhi(),
+      bz.getTime(),
+      bz.getTimeWuXing(),
+      bz.getTimeNaYin(),
+      bz.getTimeShiShenGan(),
+      bz.getTimeShiShenZhi(),
+      bz.getTimeHideGan(),
+      bz.getTimeDiShi(),
+    ),
   };
 
   // 五行计数：天干 + 地支主气（藏干首位）
@@ -151,7 +209,8 @@ export function buildBazi(
     daYun,
     currentDaYun,
     birthYear,
-    sectNote: '流派口径：子时整时换日（23:00 起归次日，不分早晚子）；起运按分钟精度（3 天折 1 年）。如需古法夜子时口径，可在后续版本开放流派切换。',
+    sectNote:
+      '流派口径：子时整时换日（23:00 起归次日，不分早晚子）；起运按分钟精度（3 天折 1 年）。如需古法夜子时口径，可在后续版本开放流派切换。',
   };
 }
 

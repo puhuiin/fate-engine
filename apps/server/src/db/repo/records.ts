@@ -45,9 +45,10 @@ export function createRecordRepo(db: Db) {
         ' WHERE r.user_id = ?';
       const cols = `r.id, r.archive_id, r.calc_type, r.status, r.paid_status, r.created_at,
                     a.solar_date, a.solar_time, a.city_name`;
-      return db
-        .prepare(`SELECT ${cols} ${base} ORDER BY r.created_at DESC`)
-        .all(userId) as Record<string, unknown>[];
+      return db.prepare(`SELECT ${cols} ${base} ORDER BY r.created_at DESC`).all(userId) as Record<
+        string,
+        unknown
+      >[];
     },
     markPaid(recordId: number): void {
       db.prepare('UPDATE calculate_record SET paid_status = 1 WHERE id = ?').run(recordId);

@@ -52,9 +52,9 @@ export function runL6(
   const raw = {
     stable: (wc['土'] ?? 0) + (wc['金'] ?? 0),
     breakout: (wc['木'] ?? 0) + (wc['火'] ?? 0) + countOf('七杀') + countOf('伤官'),
-    synergy: (countOf('比肩') + countOf('劫财')) + (wc['水'] ?? 0) + socialScore / 30,
+    synergy: countOf('比肩') + countOf('劫财') + (wc['水'] ?? 0) + socialScore / 30,
     transform:
-      (countOf('正印') + countOf('偏印')) + (wc['水'] ?? 0) + (wc['木'] ?? 0) + decisionScore / 30,
+      countOf('正印') + countOf('偏印') + (wc['水'] ?? 0) + (wc['木'] ?? 0) + decisionScore / 30,
   };
   const maxRaw = Math.max(...Object.values(raw), 1);
   const fitOf = (k: keyof typeof raw) => Math.round((raw[k] / maxRaw) * 100);

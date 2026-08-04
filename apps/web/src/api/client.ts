@@ -18,9 +18,14 @@ const REQUEST_TIMEOUT = 15000;
 const RETRY_MAX = 2;
 const RETRY_BASE_MS = 400;
 
-async function fetchWithRetry(path: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+async function fetchWithRetry(
+  path: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
   let attempt = 0;
-  const maxAttempts = !init.method || init.method === 'GET' || init.method === 'HEAD' ? RETRY_MAX + 1 : 1;
+  const maxAttempts =
+    !init.method || init.method === 'GET' || init.method === 'HEAD' ? RETRY_MAX + 1 : 1;
   while (true) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -55,15 +60,19 @@ async function request<T>(path: string, options?: RequestInit): Promise<ApiResp<
   const token = getToken();
   let res: Response;
   try {
-    res = await fetchWithRetry(path, {
-      method: options?.method,
-      body: options?.body,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options?.headers ?? {}),
+    res = await fetchWithRetry(
+      path,
+      {
+        method: options?.method,
+        body: options?.body,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(options?.headers ?? {}),
+        },
       },
-    }, REQUEST_TIMEOUT);
+      REQUEST_TIMEOUT,
+    );
   } catch {
     throw new Error('网络请求超时或失败，请稍后重试');
   }
@@ -240,7 +249,14 @@ export interface L8Result {
 }
 
 export interface L6Result {
-  lines: Array<{ key: string; name: string; strategy: string; fit: number; trigger: string; risk: string }>;
+  lines: Array<{
+    key: string;
+    name: string;
+    strategy: string;
+    fit: number;
+    trigger: string;
+    risk: string;
+  }>;
   branchPoints: Array<{
     age: number;
     year: number;
@@ -342,9 +358,7 @@ export function getMe(): Promise<ApiResp<User | null>> {
   return request('/api/v1/auth/me');
 }
 
-export function updateProfile(
-  body: { nickname: string },
-): Promise<ApiResp<User | null>> {
+export function updateProfile(body: { nickname: string }): Promise<ApiResp<User | null>> {
   return request('/api/v1/auth/profile', { method: 'PATCH', body: JSON.stringify(body) });
 }
 
@@ -376,7 +390,10 @@ export function getArchive(id: number): Promise<ApiResp<Archive>> {
   return request(`/api/v1/archives/${id}`);
 }
 
-export function updateArchive(id: number, body: Record<string, unknown>): Promise<ApiResp<Archive>> {
+export function updateArchive(
+  id: number,
+  body: Record<string, unknown>,
+): Promise<ApiResp<Archive>> {
   return request(`/api/v1/archives/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 }
 

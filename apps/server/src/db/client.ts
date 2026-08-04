@@ -130,12 +130,16 @@ export function createDb(dbPath: string = DB_PATH): Db {
 function migrateColumns(db: Db): void {
   const colsOf = (table: string) =>
     new Set(
-      (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name),
+      (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
+        (c) => c.name,
+      ),
     );
 
   const archive = colsOf('user_birth_archive');
   if (!archive.has('time_precision')) {
-    db.exec(`ALTER TABLE user_birth_archive ADD COLUMN time_precision TEXT NOT NULL DEFAULT 'minute'`);
+    db.exec(
+      `ALTER TABLE user_birth_archive ADD COLUMN time_precision TEXT NOT NULL DEFAULT 'minute'`,
+    );
   }
   if (!archive.has('source_reliability')) {
     db.exec(

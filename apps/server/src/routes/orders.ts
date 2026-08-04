@@ -57,9 +57,13 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
     });
     const result = tx();
     if (result.existing) {
-      return reply.send(ok({ order: orderPublic(result.existing), alreadyUnlocked: false }, '存在待支付订单'));
+      return reply.send(
+        ok({ order: orderPublic(result.existing), alreadyUnlocked: false }, '存在待支付订单'),
+      );
     }
-    return reply.send(ok({ order: orderPublic(result.created as OrderRow), alreadyUnlocked: false }, '订单已创建'));
+    return reply.send(
+      ok({ order: orderPublic(result.created as OrderRow), alreadyUnlocked: false }, '订单已创建'),
+    );
   });
 
   /**
@@ -110,7 +114,9 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
     if (rec && rec.paid_status === 1) {
       repos.orders.markGrantedById(order.id);
       const granted = repos.orders.findById(order.id);
-      return reply.send(ok({ order: orderPublic(granted as OrderRow), paidStatus: 1 }, '记录已解锁'));
+      return reply.send(
+        ok({ order: orderPublic(granted as OrderRow), paidStatus: 1 }, '记录已解锁'),
+      );
     }
 
     const tx = repos.db.transaction(() => {
@@ -120,26 +126,32 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
     tx();
 
     const granted = repos.orders.findById(order.id);
-    return reply.send(ok({ order: orderPublic(granted as OrderRow), paidStatus: 1 }, '支付成功，深度报告已解锁'));
+    return reply.send(
+      ok({ order: orderPublic(granted as OrderRow), paidStatus: 1 }, '支付成功，深度报告已解锁'),
+    );
   });
 
   /** 查询某记录解锁状态与最新订单 */
-  app.get('/api/v1/orders/status/:recordId', { preHandler: app.authenticate }, async (req, reply) => {
-    const recordId = parseId((req.params as { recordId: string }).recordId);
-    if (!recordId) {
-      return reply.send(fail(400, '参数 recordId 不合法'));
-    }
-    const record = repos.records.findMetaById(recordId, req.userId);
-    if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
-    }
-    const order = repos.orders.latestByRecord(recordId, req.userId);
-    return reply.send(
-      ok({
-        paidStatus: record.paid_status,
-        lockedLayers: lockedLayers(record.paid_status === 1),
-        order: order ? orderPublic(order) : null,
-      }),
-    );
-  });
+  app.get(
+    '/api/v1/orders/status/:recordId',
+    { preHandler: app.authenticate },
+    async (req, reply) => {
+      const recordId = parseId((req.params as { recordId: string }).recordId);
+      if (!recordId) {
+        return reply.send(fail(400, '参数 recordId 不合法'));
+      }
+      const record = repos.records.findMetaById(recordId, req.userId);
+      if (!record) {
+        return reply.send(fail(404, '记录不存在或无权访问'));
+      }
+      const order = repos.orders.latestByRecord(recordId, req.userId);
+      return reply.send(
+        ok({
+          paidStatus: record.paid_status,
+          lockedLayers: lockedLayers(record.paid_status === 1),
+          order: order ? orderPublic(order) : null,
+        }),
+      );
+    },
+  );
 }

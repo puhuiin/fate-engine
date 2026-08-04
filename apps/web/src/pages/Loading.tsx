@@ -55,7 +55,10 @@ export default function Loading() {
           const isDone = item.layer <= doneCount;
           const isActive = item.layer === doneCount + 1;
           return (
-            <div key={item.layer} className={`layer-item ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}>
+            <div
+              key={item.layer}
+              className={`layer-item ${isDone ? 'done' : ''} ${isActive ? 'active' : ''}`}
+            >
               <span className="layer-no">L{item.layer}</span>
               <span className="layer-name">{item.name}</span>
               <span className="layer-status">{isDone ? '✓' : isActive ? '→' : '…'}</span>

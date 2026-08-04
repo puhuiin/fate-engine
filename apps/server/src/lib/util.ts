@@ -29,11 +29,7 @@ export function fail(code: number, msg: string): ApiResp {
 /** 签发 N 秒有效 token（HMAC 签名，无需外部依赖），有效期可经 FATE_TOKEN_TTL_SECONDS 配置 */
 export function signToken(userId: number): string {
   const payload = `${userId}.${Date.now() + config.tokenTtlSeconds * 1000}`;
-  const sig = crypto
-    .createHmac('sha256', config.secret)
-    .update(payload)
-    .digest('hex')
-    .slice(0, 24);
+  const sig = crypto.createHmac('sha256', config.secret).update(payload).digest('hex').slice(0, 24);
   return `${Buffer.from(payload).toString('base64url')}.${sig}`;
 }
 

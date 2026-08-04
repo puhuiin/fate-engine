@@ -6,7 +6,12 @@
 import { computeTrueSolarTime, shichenOfHour, type TrueSolarResult } from './time.js';
 import { computeLunar, isJieQiBoundaryDay, type LunarL1Result } from './lunar.js';
 import { findCity } from './location.js';
-import { rateInput, type ErrorGrade, type SourceReliability, type TimePrecision } from './rating.js';
+import {
+  rateInput,
+  type ErrorGrade,
+  type SourceReliability,
+  type TimePrecision,
+} from './rating.js';
 import { applyChinaDst, type DstAdjustment } from './dst.js';
 import { isRealDate, isRealTime } from '../../schema.js';
 
@@ -127,7 +132,8 @@ export function runL1(input: L1Input): L1Output {
   const lunar = computeLunar(timeCorrection.trueSolarClockTime);
 
   // 5. 边界风险（交节当日 / 跨日）
-  const boundaryRisk = isJieQiBoundaryDay(timeCorrection.trueSolarClockTime) || timeCorrection.crossDay;
+  const boundaryRisk =
+    isJieQiBoundaryDay(timeCorrection.trueSolarClockTime) || timeCorrection.crossDay;
 
   // 6. 误差评级
   // 时间未知时引擎仅能按正午 12:00 占位推定，实际精度至多到日——

@@ -26,7 +26,12 @@ const l1 = runL1({
   cityName: '北京',
   timezoneOffset: 8,
 });
-const l2 = runL2(l1.timeCorrection.trueSolarClockTime, 'male', l1.normalized.timeKnown, CURRENT_YEAR);
+const l2 = runL2(
+  l1.timeCorrection.trueSolarClockTime,
+  'male',
+  l1.normalized.timeKnown,
+  CURRENT_YEAR,
+);
 const l3 = runL3(l2.bazi);
 const l4 = runL4(l2.bazi);
 const l5 = runL5(l2.bazi);
@@ -145,7 +150,10 @@ const checks: Array<[string, boolean]> = [
   ['L8 七级完整', l8.levels.length === 7],
   ['L9 三课题', l9.lifeLessons.length === 3],
   ['L9 正念箴言', l9.mantra.length > 0],
-  ['L9 合规声明(娱乐/心理支持)', l9.finalNote.includes('文化娱乐') && l9.finalNote.includes('专业心理支持')],
+  [
+    'L9 合规声明(娱乐/心理支持)',
+    l9.finalNote.includes('文化娱乐') && l9.finalNote.includes('专业心理支持'),
+  ],
   ['九层全部 ready', report.length === 9 && report.every((l) => l.status === 'ready')],
   ['九层版本标注完整', report.every((l) => l.version.startsWith('V'))],
   ['哈尔滨(东经126.5) 真太阳时延后约20分', Math.abs(harbin.totalOffset - 20.1) < 1],
@@ -157,12 +165,24 @@ const checks: Array<[string, boolean]> = [
   ['拉萨(东经91.1) 真太阳时提前约2h01m', Math.abs(lhasa.totalOffset + 121.4) < 1.5],
   ['拉萨 提前至酉时', lhasa.branch === '酉'],
   ['拉萨 真太阳时≈18.6', Math.abs(lhasa.trueHours - 18.64) < 0.2],
-  ['北京 11-29 总偏差≈-4分(经度14.4-均时差11.9)', Math.abs(l1.timeCorrection.totalOffsetMinutes + 4) < 1],
+  [
+    '北京 11-29 总偏差≈-4分(经度14.4-均时差11.9)',
+    Math.abs(l1.timeCorrection.totalOffsetMinutes + 4) < 1,
+  ],
   ['L2 流派口径标注', l2.bazi.sectNote.includes('整时换日')],
-  ['主用例四柱=壬午辛亥辛丑戊戌(真太阳时同日内排盘)', l2.bazi.pillars.year.ganzhi === '壬午' && l2.bazi.pillars.month.ganzhi === '辛亥' && l2.bazi.pillars.day.ganzhi === '辛丑' && l2.bazi.pillars.time.ganzhi === '戊戌'],
+  [
+    '主用例四柱=壬午辛亥辛丑戊戌(真太阳时同日内排盘)',
+    l2.bazi.pillars.year.ganzhi === '壬午' &&
+      l2.bazi.pillars.month.ganzhi === '辛亥' &&
+      l2.bazi.pillars.day.ganzhi === '辛丑' &&
+      l2.bazi.pillars.time.ganzhi === '戊戌',
+  ],
   ['主用例日主为辛(非跨日次日壬)', l2.bazi.dayMaster.gan === '辛'],
   ['哈尔滨23:40 跨日至次日子时', harbinLate.crossDay && harbinLate.branch === '子'],
-  ['哈尔滨23:40 日柱用次日(庚戌)而非当日', harbinLate.dayGanZhi === '庚戌' && harbinLate.field.startsWith('2026-08-04')],
+  [
+    '哈尔滨23:40 日柱用次日(庚戌)而非当日',
+    harbinLate.dayGanZhi === '庚戌' && harbinLate.field.startsWith('2026-08-04'),
+  ],
   ['乌鲁木齐20:40 当日酉时日柱己酉', urumqi.branch === '酉'],
   ['非法日期2026-02-30/时间24:99 被拒绝', rejectsInvalid()],
   ['夏令时1988 扣1h至巳时', dstIn.applied && dstIn.branch === '巳'],
@@ -174,8 +194,17 @@ const checks: Array<[string, boolean]> = [
   ['夏令时1986 开始前一天 23:00 不生效', !dstStartPrevDay.applied],
   ['夏令时1986 结束时刻 02:00 起结束', !dstEndOn.applied],
   ['夏令时1986 结束前 01:59 仍生效', dstEndPre.applied],
-  ['海外时区(洛杉矶 UTC-8) 真太阳时 0-24 且含农历', overseas.timeCorrection.trueSolarHours >= 0 && overseas.timeCorrection.trueSolarHours < 24 && overseas.lunar.dayGanZhi.length > 0],
-  ['主用例大运前5步完整且年份单调', l2.bazi.daYun.length >= 5 && l2.bazi.daYun.every((d, i, arr) => (i === 0 || d.startYear >= arr[i - 1].endYear))],
+  [
+    '海外时区(洛杉矶 UTC-8) 真太阳时 0-24 且含农历',
+    overseas.timeCorrection.trueSolarHours >= 0 &&
+      overseas.timeCorrection.trueSolarHours < 24 &&
+      overseas.lunar.dayGanZhi.length > 0,
+  ],
+  [
+    '主用例大运前5步完整且年份单调',
+    l2.bazi.daYun.length >= 5 &&
+      l2.bazi.daYun.every((d, i, arr) => i === 0 || d.startYear >= arr[i - 1].endYear),
+  ],
 ];
 
 let failed = 0;

@@ -27,7 +27,11 @@ export default class ErrorBoundary extends Component<Props, State> {
         <h3>页面渲染出错</h3>
         <p className="error">抱歉，页面出现异常。可尝试刷新或返回首页。</p>
         <div className="actions">
-          <button type="button" className="ghost" onClick={() => this.setState({ hasError: false })}>
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => this.setState({ hasError: false })}
+          >
             重试
           </button>
           <button type="button" className="ghost" onClick={() => window.location.replace('/')}>

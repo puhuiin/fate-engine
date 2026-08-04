@@ -4,7 +4,9 @@ import type { Db } from '../client.js';
 export function createSmsRepo(db: Db) {
   return {
     deleteExpiredByPhone(phone: string): void {
-      db.prepare("DELETE FROM sms_code WHERE phone = ? AND expires_at <= datetime('now')").run(phone);
+      db.prepare("DELETE FROM sms_code WHERE phone = ? AND expires_at <= datetime('now')").run(
+        phone,
+      );
     },
     latestUnusedInWindow(phone: string): { created_at: string } | undefined {
       return db
@@ -36,8 +38,7 @@ export function createSmsRepo(db: Db) {
            ORDER BY id DESC LIMIT 1`,
         )
         .get(phone) as
-        | (Record<string, unknown> & { id: number; code: string; fail_count?: number })
-        | undefined;
+        (Record<string, unknown> & { id: number; code: string; fail_count?: number }) | undefined;
     },
     incrementFailCount(id: number, tried: number): void {
       db.prepare('UPDATE sms_code SET fail_count = ? WHERE id = ?').run(tried, id);

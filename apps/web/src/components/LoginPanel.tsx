@@ -22,7 +22,7 @@ export default function LoginPanel({ me, onLogin }: { me: User | null; onLogin: 
     if (smsCooldown <= 0) return;
     const timer = setInterval(() => setSmsCooldown((n) => n - 1), 1000);
     return () => clearInterval(timer);
-  }, [smsCooldown > 0]);
+  }, [smsCooldown]);
 
   const sendCode = async () => {
     setSmsMsg('');
@@ -34,7 +34,9 @@ export default function LoginPanel({ me, onLogin }: { me: User | null; onLogin: 
     try {
       const res = await sendSmsCode(phone);
       if (res.code === 200) {
-        setSmsMsg(res.data?.devCode ? `验证码已发送（开发模式：${res.data.devCode}）` : '验证码已发送');
+        setSmsMsg(
+          res.data?.devCode ? `验证码已发送（开发模式：${res.data.devCode}）` : '验证码已发送',
+        );
         setSmsCooldown(60);
       } else {
         setSmsMsg(res.msg || '发送失败，请稍后重试');

@@ -37,9 +37,8 @@ export function createOrderRepo(db: Db) {
       return db.prepare('SELECT * FROM order_pay WHERE id = ?').get(id) as T | undefined;
     },
     findByIdAndUser<T = Record<string, unknown>>(id: number, userId: number) {
-      return db
-        .prepare('SELECT * FROM order_pay WHERE id = ? AND user_id = ?')
-        .get(id, userId) as T | undefined;
+      return db.prepare('SELECT * FROM order_pay WHERE id = ? AND user_id = ?').get(id, userId) as
+        T | undefined;
     },
     latestByRecord(recordId: number, userId: number) {
       return db

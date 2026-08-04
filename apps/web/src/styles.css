@@ -245,7 +245,9 @@ body {
   flex-direction: column;
   gap: 4px;
   background: #fff;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .calc-type input {

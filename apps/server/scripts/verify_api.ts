@@ -15,7 +15,7 @@ interface Resp {
   json: {
     code: number;
     msg: string;
-    data: Record<string, any> | null;
+    data: Record<string, unknown> | null;
   };
 }
 
@@ -45,7 +45,8 @@ function check(name: string, cond: boolean): void {
 /** 直接查库断言（级联清理证据） */
 function count(table: string, where: string, ...args: Array<string | number>): number {
   return Number(
-    (db.prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE ${where}`).get(...args) as { c: number }).c,
+    (db.prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE ${where}`).get(...args) as { c: number })
+      .c,
   );
 }
 
@@ -63,7 +64,10 @@ const tokenB: string = gb.json.data?.token;
 check('游客登录 B 返回 token（越权方）', gb.status === 200 && typeof tokenB === 'string');
 
 const guestEmptyNick = await call('POST', '/api/v1/auth/guest', { body: { nickname: '   ' } });
-check('guest 空白昵称 400（trim+min1）', guestEmptyNick.status === 400 && guestEmptyNick.json.code === 400);
+check(
+  'guest 空白昵称 400（trim+min1）',
+  guestEmptyNick.status === 400 && guestEmptyNick.json.code === 400,
+);
 
 const tampered = tokenA.slice(0, -1) + (tokenA.endsWith('a') ? 'b' : 'a');
 const tamperedRes = await call('GET', '/api/v1/archives', { token: tampered });
@@ -106,7 +110,9 @@ const patch = await call('PATCH', `/api/v1/archives/${archive1}`, {
 });
 check(
   'PATCH 编辑档案生效',
-  patch.status === 200 && patch.json.data?.city_name === '南京' && patch.json.data?.gender === 'male',
+  patch.status === 200 &&
+    patch.json.data?.city_name === '南京' &&
+    patch.json.data?.gender === 'male',
 );
 
 const patchBad = await call('PATCH', `/api/v1/archives/${archive1}`, {
@@ -186,9 +192,10 @@ check(
     risksLocked.json.data?.total === 0,
 );
 
-const hiddenPlanId = (db.prepare('SELECT id FROM luck_plan WHERE record_id = ? LIMIT 1').get(record1) as
-  | { id: number }
-  | undefined)?.id;
+const hiddenPlanId = (
+  db.prepare('SELECT id FROM luck_plan WHERE record_id = ? LIMIT 1').get(record1) as
+    { id: number } | undefined
+)?.id;
 const tickLocked = await call('PATCH', `/api/v1/plans/${hiddenPlanId}`, {
   token: tokenA,
   body: { status: 'done' },
@@ -199,14 +206,22 @@ check('未付费改方案打卡 403', tickLocked.status === 403 && tickLocked.js
 const ord1 = await call('POST', '/api/v1/orders', { token: tokenA, body: { recordId: record1 } });
 const orderId = ord1.json.data?.order?.id as number;
 const amount = ord1.json.data?.order?.amount_cents as number;
-check('创建解锁订单 ¥99(9900)', ord1.status === 200 && amount === 9900 && Number.isInteger(orderId));
+check(
+  '创建解锁订单 ¥99(9900)',
+  ord1.status === 200 && amount === 9900 && Number.isInteger(orderId),
+);
 check('订单响应不含内部 user_id', ord1.json.data?.order?.user_id === undefined);
 
 const ord2 = await call('POST', '/api/v1/orders', { token: tokenA, body: { recordId: record1 } });
-check('重复下单返回同一 pending 订单', ord2.status === 200 && ord2.json.data?.order?.id === orderId);
+check(
+  '重复下单返回同一 pending 订单',
+  ord2.status === 200 && ord2.json.data?.order?.id === orderId,
+);
 
 // 订单过期机制：人为改旧后再次下单应作废旧单并新建；对过期订单支付返回 410
-db.prepare(`UPDATE order_pay SET created_at = datetime('now', '-2 hours') WHERE id = ?`).run(orderId);
+db.prepare(`UPDATE order_pay SET created_at = datetime('now', '-2 hours') WHERE id = ?`).run(
+  orderId,
+);
 const ord3 = await call('POST', '/api/v1/orders', { token: tokenA, body: { recordId: record1 } });
 const orderId3 = ord3.json.data?.order?.id as number;
 const expiredOld = db
@@ -251,18 +266,27 @@ const payAgain = await call('POST', `/api/v1/orders/${orderId3}/pay`, {
   token: tokenA,
   body: { channel: 'mock' },
 });
-check('已支付订单重复支付返回已支付', payAgain.status === 200 && payAgain.json.data?.paidStatus === 1);
+check(
+  '已支付订单重复支付返回已支付',
+  payAgain.status === 200 && payAgain.json.data?.paidStatus === 1,
+);
 
 const payBadChannel = await call('POST', `/api/v1/orders/${orderId3}/pay`, {
   token: tokenA,
   body: { channel: 'crypto' },
 });
-check('非法支付渠道 400（白名单校验）', payBadChannel.status === 400 && payBadChannel.json.code === 400);
+check(
+  '非法支付渠道 400（白名单校验）',
+  payBadChannel.status === 400 && payBadChannel.json.code === 400,
+);
 
 const paidRec = await call('GET', `/api/v1/records/${record1}`, { token: tokenA });
 check('付费后记录 L4 完整可见', paidRec.status === 200 && paidRec.json.data?.report?.l4 != null);
 check('付费后记录 paidStatus=1', paidRec.json.data?.paidStatus === 1);
-check('记录响应不含内部 user_id 字段', paidRec.json.data?.user_id === undefined && paidRec.json.data?.raw_json === undefined);
+check(
+  '记录响应不含内部 user_id 字段',
+  paidRec.json.data?.user_id === undefined && paidRec.json.data?.raw_json === undefined,
+);
 check('正常记录 dataError=false', paidRec.json.data?.dataError === false);
 
 db.prepare("UPDATE calculate_record SET raw_json = '{broken' WHERE id = ?").run(record1);
@@ -275,10 +299,16 @@ check(
 );
 db.prepare('UPDATE calculate_record SET raw_json = NULL WHERE id = ?').run(record1);
 const nullRec = await call('GET', `/api/v1/records/${record1}`, { token: tokenA });
-check('无 raw_json 记录同样标记 dataError', nullRec.status === 200 && nullRec.json.data?.dataError === true);
+check(
+  '无 raw_json 记录同样标记 dataError',
+  nullRec.status === 200 && nullRec.json.data?.dataError === true,
+);
 
 const st = await call('GET', `/api/v1/orders/status/${record1}`, { token: tokenA });
-check('订单状态接口已解锁且无锁定层', st.json.data?.paidStatus === 1 && (st.json.data?.lockedLayers as unknown[]).length === 0);
+check(
+  '订单状态接口已解锁且无锁定层',
+  st.json.data?.paidStatus === 1 && (st.json.data?.lockedLayers as unknown[]).length === 0,
+);
 
 // 订单历史列表：当前用户全部订单倒序，剥离 user_id，包含关联记录摘要
 const orderList = await call('GET', `/api/v1/orders`, { token: tokenA });
@@ -286,7 +316,9 @@ check(
   '订单历史接口返回已支付订单且不含 user_id',
   orderList.status === 200 &&
     Array.isArray(orderList.json.data) &&
-    orderList.json.data.some((o: Record<string, unknown>) => o.order_no === ord1.json.data?.order?.order_no) &&
+    orderList.json.data.some(
+      (o: Record<string, unknown>) => o.order_no === ord1.json.data?.order?.order_no,
+    ) &&
     orderList.json.data.every((o: Record<string, unknown>) => o.user_id === undefined),
 );
 const crossOrderList = await call('GET', `/api/v1/orders`, { token: tokenB });
@@ -323,7 +355,10 @@ const noteOk = await call('PATCH', `/api/v1/plans/${planId}`, {
   token: tokenA,
   body: { note: '一周内执行一次' },
 });
-check('改运备注正常写入', noteOk.status === 200 && (noteOk.json.data?.content as string).includes('一周内执行一次'));
+check(
+  '改运备注正常写入',
+  noteOk.status === 200 && (noteOk.json.data?.content as string).includes('一周内执行一次'),
+);
 
 const badStatus = await call('PATCH', `/api/v1/plans/${planId}`, {
   token: tokenA,
@@ -362,10 +397,7 @@ const blankNote = await call('PATCH', `/api/v1/plans/${planId}`, {
 const planContentAfter = (
   db.prepare('SELECT content FROM luck_plan WHERE id = ?').get(planId) as { content: string }
 ).content;
-check(
-  '空白备注不追加空行',
-  blankNote.status === 200 && planContentAfter === planContentBefore,
-);
+check('空白备注不追加空行', blankNote.status === 200 && planContentAfter === planContentBefore);
 
 const risks = await call('GET', `/api/v1/records/${record1}/risks`, { token: tokenA });
 const riskLevels = (risks.json.data?.risks as Array<{ risk_level: number }> | undefined)?.map(
@@ -410,7 +442,9 @@ const ph = await call('POST', '/api/v1/auth/phone', {
 });
 check(
   '验证码登录成功且手机号脱敏',
-  ph.status === 200 && typeof ph.json.data?.token === 'string' && ph.json.data?.user?.phone_masked === '138****5678',
+  ph.status === 200 &&
+    typeof ph.json.data?.token === 'string' &&
+    ph.json.data?.user?.phone_masked === '138****5678',
 );
 check('登录响应不含明文完整手机号', ph.json.data?.user?.phone === undefined);
 
@@ -459,7 +493,10 @@ const code3 = sms3.json.data?.devCode as string;
 const relogin = await call('POST', '/api/v1/auth/phone', {
   body: { phone: '13900001111', code: code3 },
 });
-check('重新获取验证码后可正常登录', relogin.status === 200 && typeof relogin.json.data?.token === 'string');
+check(
+  '重新获取验证码后可正常登录',
+  relogin.status === 200 && typeof relogin.json.data?.token === 'string',
+);
 
 // ---------- 9c. 游客数据迁移：手机号登录时合并游客档案/测算记录 ----------
 const gm = await call('POST', '/api/v1/auth/guest', { body: { nickname: '待合并游客' } });
@@ -473,7 +510,10 @@ const calcM = await call('POST', '/api/v1/calculate', {
   token: tokenM,
   body: { archiveId: archiveM, calcType: 'standard' },
 });
-check('合并前游客独立测算成功', calcM.status === 200 && Number.isInteger(calcM.json.data?.recordId));
+check(
+  '合并前游客独立测算成功',
+  calcM.status === 200 && Number.isInteger(calcM.json.data?.recordId),
+);
 
 const smsM = await call('POST', '/api/v1/auth/sms/send', {
   body: { phone: '13766668888', channel: 'login' },
@@ -499,7 +539,9 @@ const listMergedRec = await call('GET', '/api/v1/records', { token: tokenMerged 
 check(
   '合并后手机号账号可见游客记录',
   listMergedRec.status === 200 &&
-    (listMergedRec.json.data as Array<{ archive_id: number }>).some((r) => r.archive_id === archiveM),
+    (listMergedRec.json.data as Array<{ archive_id: number }>).some(
+      (r) => r.archive_id === archiveM,
+    ),
 );
 
 // ---------- 10. 越权防护：B 访问 A 的资源 → 404 ----------
@@ -532,9 +574,15 @@ check('非数字 id 返回 400 而非 500', badId.status === 400 && badId.json.c
 const badId2 = await call('GET', `/api/v1/records/-5`, { token: tokenA });
 check('负 id 返回 400', badId2.status === 400 && badId2.json.code === 400);
 const badHex = await call('GET', '/api/v1/records/0x10', { token: tokenA });
-check('十六进制 id 拒绝 400（parseId 严格十进制）', badHex.status === 400 && badHex.json.code === 400);
+check(
+  '十六进制 id 拒绝 400（parseId 严格十进制）',
+  badHex.status === 400 && badHex.json.code === 400,
+);
 const badSci = await call('GET', '/api/v1/records/1e2', { token: tokenA });
-check('科学计数法 id 拒绝 400（parseId 严格十进制）', badSci.status === 400 && badSci.json.code === 400);
+check(
+  '科学计数法 id 拒绝 400（parseId 严格十进制）',
+  badSci.status === 400 && badSci.json.code === 400,
+);
 const badPay = await call('POST', `/api/v1/orders/xyz/pay`, {
   token: tokenA,
   body: { channel: 'mock' },
@@ -560,7 +608,9 @@ check(
 const pageNoArg = await call('GET', `/api/v1/records`, { token: tokenA });
 check(
   '不分页时保持数组语义兼容',
-  pageNoArg.status === 200 && Array.isArray(pageNoArg.json.data) && (pageNoArg.json.data as unknown[]).length >= 2,
+  pageNoArg.status === 200 &&
+    Array.isArray(pageNoArg.json.data) &&
+    (pageNoArg.json.data as unknown[]).length >= 2,
 );
 const pageClamp = await call('GET', '/api/v1/records?page=999&pageSize=9999', { token: tokenA });
 check(
@@ -568,11 +618,10 @@ check(
   pageClamp.status === 200 && pageClamp.json.data?.pageSize === 50,
 );
 const pageHuge = await call('GET', '/api/v1/records?page=1e999', { token: tokenA });
-check(
-  'page 非有限数不 500，降级为 1',
-  pageHuge.status === 200 && pageHuge.json.data?.page === 1,
-);
-const pageBigInt = await call('GET', '/api/v1/records?page=99999999999999999999', { token: tokenA });
+check('page 非有限数不 500，降级为 1', pageHuge.status === 200 && pageHuge.json.data?.page === 1);
+const pageBigInt = await call('GET', '/api/v1/records?page=99999999999999999999', {
+  token: tokenA,
+});
 check(
   'page 超大有限数不 500，clamp 到 100000',
   pageBigInt.status === 200 && pageBigInt.json.data?.page === 100000,
@@ -600,7 +649,10 @@ check(
 
 // ---------- 12. 档案删除级联清理 ----------
 const delArc = await call('DELETE', `/api/v1/archives/${archive2}`, { token: tokenA });
-check('档案删除成功且级联移除 1 条记录', delArc.status === 200 && delArc.json.data?.removedRecords === 1);
+check(
+  '档案删除成功且级联移除 1 条记录',
+  delArc.status === 200 && delArc.json.data?.removedRecords === 1,
+);
 check(
   '档案删除后记录/方案/订单/风险项全清',
   count('calculate_record', 'id = ?', record2) === 0 &&
@@ -609,7 +661,10 @@ check(
 );
 
 const delArc1 = await call('DELETE', `/api/v1/archives/${archive1}`, { token: tokenA });
-check('删除已无记录的档案 removedRecords=0', delArc1.status === 200 && delArc1.json.data?.removedRecords === 0);
+check(
+  '删除已无记录的档案 removedRecords=0',
+  delArc1.status === 200 && delArc1.json.data?.removedRecords === 0,
+);
 
 // ---------- 13. 内核日志 ----------
 const kl = await call('POST', '/api/v1/kernel/log', {
@@ -654,9 +709,8 @@ check(
     rlHit.headers['x-ratelimit-remaining'] === '0' &&
     rlHit.headers['retry-after'] !== undefined,
 );
-const firstHeaders = (
-  await rlApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' })
-).headers;
+const firstHeaders = (await rlApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' }))
+  .headers;
 check(
   '放行请求携带 X-RateLimit-Remaining 剩余额度',
   firstHeaders['x-ratelimit-remaining'] !== undefined && firstHeaders['x-ratelimit-limit'] === '3',
@@ -718,7 +772,10 @@ const basicAuth = await app.inject({
   url: '/api/v1/archives',
   headers: { authorization: 'Basic dXNlcjpwYXNz' },
 });
-check('Basic 头不带 Bearer 前缀 401', basicAuth.statusCode === 401 && basicAuth.json().code === 401);
+check(
+  'Basic 头不带 Bearer 前缀 401',
+  basicAuth.statusCode === 401 && basicAuth.json().code === 401,
+);
 const bareBearer = await app.inject({
   method: 'GET',
   url: '/api/v1/archives',
@@ -796,9 +853,15 @@ const updAfter = await call('GET', `/api/v1/archives/${updId}`, { token: tokenA 
 const updData = updAfter.json.data as Record<string, unknown>;
 check('PATCH 部分更新成功（仅改 note）', updPatch.status === 200 && updData.note === '仅改备注');
 check('PATCH 未传字段不被覆盖（time_precision 保持 fuzzy）', updData.time_precision === 'fuzzy');
-check('PATCH 未传字段不被覆盖（source_reliability 保持 family）', updData.source_reliability === 'family');
+check(
+  'PATCH 未传字段不被覆盖（source_reliability 保持 family）',
+  updData.source_reliability === 'family',
+);
 const updSolar = await call('GET', `/api/v1/archives/${updId}`, { token: tokenA });
-check('PATCH 未传字段不被覆盖（solar_time 保持 08:30）', (updSolar.json.data as { solar_time: string }).solar_time === '08:30');
+check(
+  'PATCH 未传字段不被覆盖（solar_time 保持 08:30）',
+  (updSolar.json.data as { solar_time: string }).solar_time === '08:30',
+);
 
 // null 显式置空时间字段
 const nullPatch = await call('PATCH', `/api/v1/archives/${updId}`, {
@@ -808,7 +871,8 @@ const nullPatch = await call('PATCH', `/api/v1/archives/${updId}`, {
 const nullAfter = await call('GET', `/api/v1/archives/${updId}`, { token: tokenA });
 check(
   'PATCH null 置空时间字段',
-  nullPatch.status === 200 && (nullAfter.json.data as { solar_time?: string | null }).solar_time === null,
+  nullPatch.status === 200 &&
+    (nullAfter.json.data as { solar_time?: string | null }).solar_time === null,
 );
 
 // ---------- 17. 无时间档案：置信度强制降级，不虚高 ----------
@@ -828,11 +892,9 @@ const noTimeCalc = await call('POST', '/api/v1/calculate', {
   token: tokenA,
   body: { archiveId: noTimeArcId },
 });
-const noTimeL1 = (
-  (noTimeCalc.json.data?.report as Array<{ layer: number; data: unknown }> | null)?.find(
-    (x) => x.layer === 1,
-  )?.data ?? {}
-) as Record<string, unknown>;
+const noTimeL1 = ((
+  noTimeCalc.json.data?.report as Array<{ layer: number; data: unknown }> | null
+)?.find((x) => x.layer === 1)?.data ?? {}) as Record<string, unknown>;
 const noTimeNormalized = (noTimeL1.normalized ?? {}) as Record<string, unknown>;
 const noTimeRating = (noTimeL1.rating ?? { confidence: 0 }) as { confidence: number };
 check('无时间档案测算成功', noTimeCalc.status === 200);
