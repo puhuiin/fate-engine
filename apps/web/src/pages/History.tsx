@@ -36,7 +36,7 @@ export default function History() {
   const [stats, setStats] = useState<StatsOverview | null>(null);
   const [orders, setOrders] = useState<OrderRecord[]>([]);
 
-  const load = async (targetPage: number) => {
+  const load = async (targetPage: number, isLoadMore = false) => {
     setLoadError('');
     const [rec, arc, user, st, od] = await Promise.allSettled([
       listRecords(targetPage, PAGE_SIZE),
@@ -55,8 +55,9 @@ export default function History() {
     if (user.status === 'fulfilled') setMe(user.value.data);
     if (st.status === 'fulfilled') setStats(st.value.data);
     if (od.status === 'fulfilled') setOrders(od.value.data);
-    if (rec.status === 'rejected' && arc.status === 'rejected') {
-      setLoadError('数据加载失败，请检查网络后重试');
+    if (rec.status === 'rejected') {
+      if (isLoadMore) window.alert('加载更多失败，请稍后重试');
+      else setLoadError('数据加载失败，请检查网络后重试');
     }
     setLoading(false);
   };
@@ -68,18 +69,16 @@ export default function History() {
   const loadMore = async () => {
     if (loadingMore || records.length >= total) return;
     setLoadingMore(true);
-    try {
-      await load(page + 1);
-    } catch {
-      setLoadError('加载更多失败，请稍后重试');
-    } finally {
-      setLoadingMore(false);
-    }
+    await load(page + 1, true);
+    setLoadingMore(false);
   };
 
   const ensureGuest = async () => {
     if (!localStorage.getItem('fate_token')) {
       const guest = await guestLogin();
+      if (guest.code !== 200) {
+        throw new Error(guest.msg || '游客登录失败，请重试');
+      }
       setToken(guest.data.token);
     }
   };
@@ -88,9 +87,13 @@ export default function History() {
     try {
       await ensureGuest();
       const calc = await calculate(archiveId, 'standard');
+      if (calc.code !== 200) {
+        window.alert(calc.msg || '测算失败，请重试');
+        return;
+      }
       navigate('/loading', { state: { recordId: calc.data.recordId } });
-    } catch {
-      window.alert('测算失败，请重试');
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : '测算失败，请重试');
     }
   };
 
