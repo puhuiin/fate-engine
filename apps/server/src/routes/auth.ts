@@ -27,6 +27,21 @@ export async function requireAuth(
 /** 同一验证码最多允许的错误尝试次数，超过则作废并要求重新获取 */
 const MAX_CODE_ATTEMPTS = 5;
 
+/** 短信验证码 IP 级限流：同一来源 IP 每小时最多发送条数，防短信轰炸（独立于手机号级限流） */
+const SMS_IP_LIMIT = 10;
+const SMS_IP_WINDOW_MS = 60 * 60 * 1000;
+const smsSendTimes = new Map<string, number[]>();
+
+/** 记录一次发送并判断是否超限（窗口内先清过期时间戳再计数） */
+function allowSmsSend(ip: string): boolean {
+  const now = Date.now();
+  const list = (smsSendTimes.get(ip) ?? []).filter((t) => now - t < SMS_IP_WINDOW_MS);
+  if (list.length >= SMS_IP_LIMIT) return false;
+  list.push(now);
+  smsSendTimes.set(ip, list);
+  return true;
+}
+
 /** 用户对外字段白名单：剥离 phone（明文）等内部字段 */
 const USER_PUBLIC_COLS =
   'id, phone_masked, nickname, register_channel, member_level, member_expire_at, created_at';
@@ -68,6 +83,9 @@ export function authRoutes(app: FastifyInstance, db: Db): void {
       .get(phone) as { created_at: string } | undefined;
     if (recent) {
       return reply.send(fail(429, '验证码已发送，请勿频繁请求'));
+    }
+    if (!allowSmsSend(req.ip)) {
+      return reply.send(fail(429, '发送过于频繁，请稍后再试'));
     }
 
     const code = String(crypto.randomInt(100000, 1000000));

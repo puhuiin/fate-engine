@@ -80,7 +80,7 @@ export default function History() {
     try {
       await load(page + 1);
     } catch {
-      setSmsMsg('加载更多失败，请稍后重试');
+      setLoadError('加载更多失败，请稍后重试');
     } finally {
       setLoadingMore(false);
     }

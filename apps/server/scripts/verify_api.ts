@@ -22,13 +22,14 @@ interface Resp {
 async function call(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   url: string,
-  opts: { body?: unknown; token?: string } = {},
+  opts: { body?: unknown; token?: string; remoteAddress?: string } = {},
 ): Promise<Resp> {
   const res = await app.inject({
     method,
     url,
     payload: opts.body,
     headers: opts.token ? { authorization: `Bearer ${opts.token}` } : {},
+    ...(opts.remoteAddress ? { remoteAddress: opts.remoteAddress } : {}),
   });
   return { status: res.statusCode, json: res.json() as Resp['json'] };
 }
@@ -210,6 +211,32 @@ const pay = await call('POST', `/api/v1/orders/${orderId}/pay`, {
 });
 check('模拟支付成功解锁', pay.status === 200 && pay.json.data?.paidStatus === 1);
 
+const uidA = ga.json.data?.user?.id as number;
+const resid = db
+  .prepare(
+    `INSERT INTO order_pay (order_no, user_id, record_id, amount_cents, entitlement_status)
+     VALUES ('RST1', ?, ?, 9900, 'pending')`,
+  )
+  .run(uidA, record1);
+const residOrderId = Number(resid.lastInsertRowid);
+const payResid = await call('POST', `/api/v1/orders/${residOrderId}/pay`, {
+  token: tokenA,
+  body: { channel: 'mock' },
+});
+check(
+  '记录已解锁时残留 pending 订单支付收尾成功',
+  payResid.status === 200 && payResid.json.data?.paidStatus === 1,
+);
+const residRow = db
+  .prepare('SELECT entitlement_status FROM order_pay WHERE id = ?')
+  .get(residOrderId) as { entitlement_status: string };
+check('残留订单状态被收尾为 granted', residRow.entitlement_status === 'granted');
+const payAgain = await call('POST', `/api/v1/orders/${orderId}/pay`, {
+  token: tokenA,
+  body: { channel: 'mock' },
+});
+check('已支付订单重复支付返回已支付', payAgain.status === 200 && payAgain.json.data?.paidStatus === 1);
+
 const payBadChannel = await call('POST', `/api/v1/orders/${orderId}/pay`, {
   token: tokenA,
   body: { channel: 'crypto' },
@@ -382,6 +409,23 @@ const relogin = await call('POST', '/api/v1/auth/phone', {
   body: { phone: '13900001111', code: code3 },
 });
 check('重新获取验证码后可正常登录', relogin.status === 200 && typeof relogin.json.data?.token === 'string');
+
+// ---------- 9c. 短信 IP 级限流：防短信轰炸 ----------
+const ipBomb = '203.0.113.99';
+let bombBlocked = 0;
+for (let i = 0; i < 11; i++) {
+  const r = await call('POST', '/api/v1/auth/sms/send', {
+    body: { phone: String(13600000000 + i), channel: 'login' },
+    remoteAddress: ipBomb,
+  });
+  if (r.status === 429) bombBlocked++;
+}
+check('同一 IP 第 11 次发送验证码被限流 429', bombBlocked === 1);
+const ipOther = await call('POST', '/api/v1/auth/sms/send', {
+  body: { phone: '13699998888', channel: 'login' },
+  remoteAddress: '203.0.113.200',
+});
+check('不同 IP 不受限流影响可正常发送', ipOther.status === 200);
 
 // ---------- 10. 越权防护：B 访问 A 的资源 → 404 ----------
 const crossArc = await call('GET', `/api/v1/archives/${archive1}`, { token: tokenB });

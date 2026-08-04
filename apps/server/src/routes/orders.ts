@@ -97,6 +97,18 @@ export function orderRoutes(app: FastifyInstance, db: Db): void {
       return reply.send(fail(400, '订单未关联测算记录'));
     }
 
+    const rec = db
+      .prepare('SELECT paid_status FROM calculate_record WHERE id = ?')
+      .get(order.record_id) as RecordRow | undefined;
+    if (rec && rec.paid_status === 1) {
+      db.prepare(
+        `UPDATE order_pay SET entitlement_status = 'granted'
+         WHERE id = ? AND entitlement_status = 'pending'`,
+      ).run(order.id);
+      const granted = db.prepare('SELECT * FROM order_pay WHERE id = ?').get(order.id);
+      return reply.send(ok({ order: orderPublic(granted as OrderRow), paidStatus: 1 }, '记录已解锁'));
+    }
+
     const tx = db.transaction(() => {
       db.prepare(
         `UPDATE order_pay SET entitlement_status = 'granted', pay_channel = ?
@@ -128,10 +140,12 @@ export function orderRoutes(app: FastifyInstance, db: Db): void {
          ORDER BY id DESC LIMIT 1`,
       )
       .get(recordId, req.userId);
-    return ok({
-      paidStatus: record.paid_status,
-      lockedLayers: lockedLayers(record.paid_status === 1),
-      order: order ? orderPublic(order as OrderRow) : null,
-    });
+    return reply.send(
+      ok({
+        paidStatus: record.paid_status,
+        lockedLayers: lockedLayers(record.paid_status === 1),
+        order: order ? orderPublic(order as OrderRow) : null,
+      }),
+    );
   });
 }

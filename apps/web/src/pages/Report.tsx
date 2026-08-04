@@ -174,6 +174,9 @@ export default function Report() {
         <button type="button" className="ghost export-btn" onClick={exportText}>
           {copied ? '已复制报告 ✓' : '复制报告文本'}
         </button>
+        <button type="button" className="ghost export-btn" onClick={() => window.print()}>
+          打印 / 保存 PDF
+        </button>
         {paidStatus !== 1 && (
           <div className="lock-banner">
             <strong>深度报告解锁 ¥99</strong>

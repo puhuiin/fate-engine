@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LAYER_SKELETON } from '../layers';
 
 export default function Loading() {
@@ -26,7 +26,14 @@ export default function Loading() {
   }, [navigate, state]);
 
   if (!state) {
-    return <div className="card">缺少测算数据，请返回重新测算。</div>;
+    return (
+      <div className="card">
+        <p>缺少测算数据，请返回重新测算。</p>
+        <p className="dim">
+          <Link to="/">返回首页</Link>
+        </p>
+      </div>
+    );
   }
 
   return (

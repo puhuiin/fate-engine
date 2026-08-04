@@ -144,7 +144,13 @@ export default function Input() {
   }
 
   return (
-    <div className="card input-card">
+    <form
+      className="card input-card"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
       <h2>{editId ? '编辑生辰信息' : '录入生辰信息'}</h2>
       <p className="hint">
         {editId ? '修改后将重新测算并生成新的报告，原记录保留可回溯。' : '用于时空校正层（L1）的真太阳时与误差评级，你的信息将脱敏存储。'}
@@ -156,6 +162,7 @@ export default function Input() {
           type="date"
           min="1900-01-01"
           max={today}
+          autoComplete="bday"
           value={solarDate}
           onChange={(e) => setSolarDate(e.target.value)}
         />
@@ -164,7 +171,7 @@ export default function Input() {
       {timeVisible && (
         <label className="field">
           <span>出生时间（钟表时间）</span>
-          <input type="time" value={solarTime} onChange={(e) => setSolarTime(e.target.value)} />
+          <input type="time" autoComplete="off" value={solarTime} onChange={(e) => setSolarTime(e.target.value)} />
         </label>
       )}
 
@@ -213,6 +220,7 @@ export default function Input() {
         <input
           type="text"
           placeholder="输入城市名，如：北京"
+          autoComplete="off"
           value={city ? `${city.name}（${city.province}）` : cityQuery}
           onChange={(e) => {
             setCity(null);
@@ -242,7 +250,7 @@ export default function Input() {
 
       {editing && <p className="dim">正在读取档案…</p>}
 
-      <button className="primary" disabled={busy || editing} onClick={submit}>
+      <button type="submit" className="primary" disabled={busy || editing}>
         {editing ? '读取中…' : busy ? '演算中…' : editId ? '保存并重新测算' : '开始测算'}
       </button>
 
@@ -250,6 +258,6 @@ export default function Input() {
         九层引擎全量上线：时空校正 → 术数算力 → 科学祛魅 → 权重量化 → 因果溯源 → 量子多线 →
         元规则内核 → 七级改运 → 实相兜底。
       </p>
-    </div>
+    </form>
   );
 }

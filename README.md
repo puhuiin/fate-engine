@@ -37,7 +37,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 5 组确定性回归脚本（44 + 8 + 15 + 42 + 80 = 189 断言） |
+| 校验 | 5 组确定性回归脚本（44 + 8 + 15 + 42 + 85 = 194 断言） |
 
 ---
 
@@ -78,14 +78,14 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（189 断言）
+# 全量回归（194 断言）
 npm run verify -w @fate/server
 
 # 分块验证
 npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时边界（8 用例）
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆（15 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（42 断言）
-npm run verify:api -w @fate/server  # 接口层（80 断言，内存 SQLite + inject）
+npm run verify:api -w @fate/server  # 接口层（85 断言，内存 SQLite + inject）
 ```
 
 断言覆盖真实业务基准：如 `2002-11-29 20:40 北京男` → 真太阳时 20.604、戌时、日主辛/金、日柱辛丑、L4 事业 68。
