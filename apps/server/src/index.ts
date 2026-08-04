@@ -26,3 +26,18 @@ try {
   app.log.error(err);
   process.exit(1);
 }
+
+/** 优雅停机：关闭 HTTP 连接 → 关闭数据库（WAL 落盘），避免进程被杀导致半写 */
+async function shutdown(signal: string): Promise<void> {
+  app.log.info(`收到 ${signal}，正在优雅停机...`);
+  try {
+    await app.close();
+  } catch (err) {
+    app.log.error(err);
+  } finally {
+    db.close();
+    process.exit(0);
+  }
+}
+process.on('SIGINT', () => void shutdown('SIGINT'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));

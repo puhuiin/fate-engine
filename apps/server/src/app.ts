@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import crypto from 'node:crypto';
 import type { Db } from './db/client.js';
 import { authRoutes } from './routes/auth.js';
 import { archiveRoutes } from './routes/archives.js';
@@ -60,6 +61,9 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     logger: opts.logger ?? true,
     bodyLimit: BODY_LIMIT,
     trustProxy: opts.trustProxy ?? parseTrustProxy(),
+    /** 请求追踪：X-Request-Id 贯穿全链路（响应自动回显同头，日志随 requestId 关联） */
+    requestIdHeader: 'x-request-id',
+    genReqId: () => crypto.randomUUID(),
   });
 
   const whitelist = opts.corsOrigins ?? parseCorsOrigins();
@@ -83,12 +87,16 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   }
 
   /** 基础安全响应头：防 MIME 嗅探 / 点击劫持 / 页面内联泄露来源 */
-  app.addHook('onRequest', async (_req, reply) => {
+  app.addHook('onRequest', async (req, reply) => {
     reply.headers({
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
       'X-XSS-Protection': '1; mode=block',
+      /** 回显请求追踪 ID（客户端可传 X-Request-Id 覆盖），便于前后端联调定位 */
+      'X-Request-Id': req.id,
+      /** API 响应默认禁止缓存，避免鉴权数据（报告/手机号/订单）落入代理或浏览器缓存 */
+      'Cache-Control': 'no-store',
     });
   });
 
@@ -99,6 +107,15 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     reply.code(status).send(
       fail(status, status >= 500 ? '服务器开小差了，请稍后重试' : e.message ?? '请求处理失败'),
     );
+  });
+
+  /** 未知 API 路由统一返回 ApiResp 结构（而非 Fastify 默认纯文本 404） */
+  app.setNotFoundHandler(async (req, reply) => {
+    const path = req.url.split('?')[0];
+    if (path.startsWith('/api')) {
+      return reply.code(404).send(fail(404, `接口不存在：${path}`));
+    }
+    return reply.code(404).send({ code: 404, msg: 'Not Found', data: null });
   });
 
   /** 统一错误语义：业务 code≠200 时同步设置 HTTP status，避免 body 与状态码不一致 */

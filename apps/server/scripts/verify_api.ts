@@ -752,6 +752,22 @@ check(
   typeof noTimeRating.confidence === 'number' && noTimeRating.confidence < 60,
 );
 
+// ---------- 11. 请求链路增强：X-Request-Id / 禁止缓存 / 未知接口 404 ----------
+const reqIdProbe = await app.inject({ method: 'GET', url: '/api/health' });
+check('响应回显 X-Request-Id 请求追踪头', typeof reqIdProbe.headers['x-request-id'] === 'string');
+check(
+  'API 响应禁止缓存（Cache-Control: no-store）',
+  String(reqIdProbe.headers['cache-control']).toLowerCase().includes('no-store'),
+);
+const notFound = await call('GET', '/api/v1/no-such-route');
+check('未知 API 路由统一 ApiResp 404', notFound.status === 404 && notFound.json.code === 404);
+const idEcho = await app.inject({
+  method: 'GET',
+  url: '/api/health',
+  headers: { 'x-request-id': 'trace-abc-123' },
+});
+check('客户端传入 X-Request-Id 被透传回显', idEcho.headers['x-request-id'] === 'trace-abc-123');
+
 db.close();
 
 if (failed > 0) {
