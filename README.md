@@ -25,7 +25,7 @@
 - **登录体系**：游客 / 手机号验证码（dev 模式回显 devCode），JWT 无状态鉴权；手机号登录时可携带游客 token 一次性合并游客档案/测算记录/订单（`mergeGuestToken`）
 - **档案管理**：个人命理档案 CRUD，记录生日、性别、出生地、时间精度、时区偏移等
 - **测算模式**：`calcType` 三档（standard / quantum / ultimate），深度越高展开的未来分叉点越多，报告页展示模式徽标
-- **付费解锁**：L4–L9 深度层默认 locked，订单 + mock 支付渠道解锁（支持 wechat / alipay / mock 白名单）；待支付订单默认 30 分钟有效，过期自动作废，并可手动取消（`POST /orders/:id/cancel`）；服务内置过期清理定时任务，启动即清一轮 + 每 60s 批量作废超时订单
+- **付费解锁**：L4–L9 深度层默认 locked，订单 + 支付渠道解锁（前端可选微信/支付宝/模拟支付，服务端 wechat / alipay / mock 白名单校验）；待支付订单默认 30 分钟有效，过期自动作废，并可手动取消（`POST /orders/:id/cancel`）；服务内置过期清理定时任务，启动即清一轮 + 每 60s 批量作废超时订单
 - **七级改运打卡**：逐条完成计划、更新状态、记录完成时间
 - **测算历史**：记录列表支持 `calcType` 深度模式筛选（standard / quantum / ultimate），分页参数带容错（自动 clamp）
 - **统计看板**：`/api/v1/stats/overview` 汇总档案数、测算数、解锁率、改运完成率与重点风险
@@ -43,7 +43,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 5 组确定性回归脚本（44 + 8 + 15 + 47 + 130 = 244 断言） |
+| 校验 | 6 组确定性回归脚本（44 + 8 + 15 + 47 + 130 + 5 = 249 断言） |
 
 ---
 
@@ -90,7 +90,7 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（244 断言）
+# 全量回归（249 断言）
 npm run verify -w @fate/server
 
 # 分块验证
@@ -98,6 +98,7 @@ npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时边界（8 �
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆（15 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（47 断言，含深度模式差异）
 npm run verify:api -w @fate/server  # 接口层（130 断言，内存 SQLite + inject，含取消订单/过期清理/模式筛选）
+npm run verify:migrate -w @fate/server  # 迁移机制（5 断言：新库全量/幂等重跑/旧库补应用）
 
 # 前端单元测试（纯函数层：白话导读 / 精度映射）
 npm run test -w @fate/web
@@ -187,8 +188,9 @@ fate-engine/
 │   │       │   ├── l2/       # 八字双流派
 │   │       │   ├── l3/ … l9/ # 后续各层，l6 含 risk 输出映射
 │   │       ├── db/
-│   │       │   ├── client.ts # better-sqlite3 连接与建表
-│   │       │   └── repo/     # Repository 数据访问层（users/archives/records/orders/plans/risks/sms/kernel/stats）
+│   │       │   ├── client.ts    # better-sqlite3 连接与建表
+│   │       │   ├── migrations.ts# 版本化迁移（schema_migrations 表 + v1-v4 幂等迁移）
+│   │       │   └── repo/        # Repository 数据访问层（users/archives/records/orders/plans/risks/sms/kernel/stats）
 │   │       ├── lib/          # util.ts（parseId / verifyToken / 签名）
 │   │       └── report.ts     # 九层报告聚合
 │   └── web/
@@ -218,6 +220,7 @@ fate-engine/
 - **数据访问分层**：SQL 读写全部收敛到 `db/repo/` Repository 层，路由层只做鉴权、校验与编排；模块层（L1–L9）保持纯计算，落库行映射（`toPlanRows` / `toRiskRows`）由模块层导出
 - **业务错误收敛**：路由统一 `throw ApiError`（`lib/errors.ts`），由全局错误处理器转 `ApiResp`；`lib/http.ts` 提供 `assertSchema` / `requireIdParam` 消除样板
 - **后台任务**：订单过期清理由 `src/jobs/expireOrders.ts` 承担（启动先清一轮 + 60s 定时，`timer.unref` 不阻塞进程退出，优雅停机时清除）
+- **Schema 演进**：`db/migrations.ts` 提供版本化迁移（`schema_migrations` 版本表 + 有序幂等迁移），启动自动应用未执行迁移；升级旧库安全可追溯，`npm run db:migrate` 可查看迁移状态
 - **可观测性**：`X-Request-Id` 全链路回显（UUID），访问日志与错误日志带 requestId 与路径；5xx 记录完整堆栈、4xx 记录告警，客户端仅收到收敛文案
 - **缓存策略**：鉴权/动态数据接口统一 `Cache-Control: no-store`，防止敏感数据进入代理缓存
 
