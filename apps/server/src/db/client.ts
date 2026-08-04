@@ -102,10 +102,12 @@ CREATE TABLE IF NOT EXISTS sms_code (
 
 CREATE INDEX IF NOT EXISTS idx_archive_user ON user_birth_archive(user_id);
 CREATE INDEX IF NOT EXISTS idx_record_user ON calculate_record(user_id);
+CREATE INDEX IF NOT EXISTS idx_record_created ON calculate_record(created_at);
 CREATE INDEX IF NOT EXISTS idx_sms_phone ON sms_code(phone);
 CREATE INDEX IF NOT EXISTS idx_record_archive ON calculate_record(archive_id);
 CREATE INDEX IF NOT EXISTS idx_risk_record ON risk_item(record_id);
 CREATE INDEX IF NOT EXISTS idx_order_record ON order_pay(record_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_order_user ON order_pay(user_id, id);
 CREATE INDEX IF NOT EXISTS idx_plan_record ON luck_plan(record_id);
 `;
 

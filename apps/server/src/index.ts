@@ -31,11 +31,17 @@ try {
 /** 优雅停机：关闭 HTTP 连接 → 关闭数据库（WAL 落盘），避免进程被杀导致半写 */
 async function shutdown(signal: string): Promise<void> {
   app.log.info(`收到 ${signal}，正在优雅停机...`);
+  const force = setTimeout(() => {
+    console.error('[fate] 优雅停机超时（5s），强制退出。');
+    process.exit(1);
+  }, 5000);
+  force.unref();
   try {
     await app.close();
   } catch (err) {
     app.log.error(err);
   } finally {
+    clearTimeout(force);
     db.close();
     process.exit(0);
   }

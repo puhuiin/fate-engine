@@ -97,16 +97,17 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   const SLOW_MS = Number(process.env.SLOW_REQUEST_MS) > 0 ? Number(process.env.SLOW_REQUEST_MS) : 800;
   app.addHook('onResponse', async (req, reply) => {
     const ms = reply.elapsedTime ?? 0;
+    const base = {
+      path: req.url,
+      method: req.method,
+      statusCode: reply.statusCode,
+      ms: Math.round(ms),
+      userId: (req as { userId?: number }).userId ?? undefined,
+    };
     if (ms > SLOW_MS) {
-      req.log.warn(
-        { path: req.url, method: req.method, statusCode: reply.statusCode, ms: Math.round(ms) },
-        '慢请求',
-      );
+      req.log.warn({ ...base }, '慢请求');
     } else if (req.url.startsWith('/api')) {
-      req.log.info(
-        { path: req.url, method: req.method, statusCode: reply.statusCode, ms: Math.round(ms) },
-        '请求完成',
-      );
+      req.log.info({ ...base }, '请求完成');
     }
   });
 
@@ -165,11 +166,17 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
 
   app.get('/api/health', async () => {
     let dbOk = true;
+    let dbSizeBytes = 0;
     try {
       db.prepare('SELECT 1 AS ok').get();
+      const sizeRow = db
+        .prepare('SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()')
+        .get() as { bytes?: number };
+      dbSizeBytes = Number(sizeRow?.bytes) || 0;
     } catch {
       dbOk = false;
     }
+    const mem = process.memoryUsage();
     return {
       ok: dbOk,
       name: 'fate-engine',
@@ -177,6 +184,9 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       env: config.env,
       uptimeSeconds: Math.round(process.uptime()),
       layers: 'L1-L9 full',
+      pid: process.pid,
+      memoryMB: Math.round(mem.rss / 1024 / 1024),
+      dbSizeMB: Math.round(dbSizeBytes / 1024 / 1024),
       time: new Date().toISOString(),
     };
   });
