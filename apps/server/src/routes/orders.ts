@@ -3,7 +3,6 @@ import crypto from 'node:crypto';
 import { config } from '../config.js';
 import { fail, ok, parseId } from '../lib/util.js';
 import type { Repos } from '../db/repo/index.js';
-import { requireAuth } from './auth.js';
 import { lockedLayers } from '../report.js';
 import { orderCreateSchema, orderPaySchema } from '../schema.js';
 
@@ -26,7 +25,7 @@ function orderPublic(o: OrderRow): OrderRow {
 
 export function orderRoutes(app: FastifyInstance, repos: Repos): void {
   /** 为指定测算记录创建解锁订单（已付费直接返回已解锁） */
-  app.post('/api/v1/orders', { preHandler: requireAuth }, async (req, reply) => {
+  app.post('/api/v1/orders', { preHandler: app.authenticate }, async (req, reply) => {
     const parsed = orderCreateSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
       return reply.send(fail(400, parsed.error.issues[0]?.message ?? 'recordId 参数错误'));
@@ -61,7 +60,7 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
    * 模拟支付成功（开发阶段：无需真实支付回调）。
    * 生产环境替换为第三方支付回调签名校验，成功后调用本逻辑。
    */
-  app.post('/api/v1/orders/:id/pay', { preHandler: requireAuth }, async (req, reply) => {
+  app.post('/api/v1/orders/:id/pay', { preHandler: app.authenticate }, async (req, reply) => {
     const id = parseId((req.params as { id: string }).id);
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
@@ -119,7 +118,7 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 查询某记录解锁状态与最新订单 */
-  app.get('/api/v1/orders/status/:recordId', { preHandler: requireAuth }, async (req, reply) => {
+  app.get('/api/v1/orders/status/:recordId', { preHandler: app.authenticate }, async (req, reply) => {
     const recordId = parseId((req.params as { recordId: string }).recordId);
     if (!recordId) {
       return reply.send(fail(400, '参数 recordId 不合法'));

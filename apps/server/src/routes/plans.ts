@@ -1,13 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { fail, ok, parseId } from '../lib/util.js';
 import type { Repos } from '../db/repo/index.js';
-import { requireAuth } from './auth.js';
 import { lockedLayers } from '../report.js';
 import { planPatchSchema } from '../schema.js';
 
 export function planRoutes(app: FastifyInstance, repos: Repos): void {
   /** 某测算记录的全部改运计划（含打卡状态）。L8 属付费层，未解锁仅返回 locked 标记 */
-  app.get('/api/v1/records/:id/plans', { preHandler: requireAuth }, async (req, reply) => {
+  app.get('/api/v1/records/:id/plans', { preHandler: app.authenticate }, async (req, reply) => {
     const id = parseId((req.params as { id: string }).id);
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
@@ -30,7 +29,7 @@ export function planRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 打卡：标记完成 / 取消完成 / 更新备注（需已解锁） */
-  app.patch('/api/v1/plans/:id', { preHandler: requireAuth }, async (req, reply) => {
+  app.patch('/api/v1/plans/:id', { preHandler: app.authenticate }, async (req, reply) => {
     const id = parseId((req.params as { id: string }).id);
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));

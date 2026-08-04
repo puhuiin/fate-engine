@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { fail, ok } from '../lib/util.js';
 import type { Repos } from '../db/repo/index.js';
-import { requireAuth } from './auth.js';
 import { kernelLogSchema, kernelQuerySchema } from '../schema.js';
 
 /**
@@ -10,7 +9,7 @@ import { kernelLogSchema, kernelQuerySchema } from '../schema.js';
  * 保留可审计的迭代链，体现「外层版本冻结 + 内核预留迭代入口」。
  */
 export function kernelRoutes(app: FastifyInstance, repos: Repos): void {
-  app.post('/api/v1/kernel/log', { preHandler: requireAuth }, async (req, reply) => {
+  app.post('/api/v1/kernel/log', { preHandler: app.authenticate }, async (req, reply) => {
     const parsed = kernelLogSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
       return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
@@ -21,7 +20,7 @@ export function kernelRoutes(app: FastifyInstance, repos: Repos): void {
     return reply.send(ok(row, '内核规则迭代已记录'));
   });
 
-  app.get('/api/v1/kernel/logs', { preHandler: requireAuth }, async (req) => {
+  app.get('/api/v1/kernel/logs', { preHandler: app.authenticate }, async (req) => {
     const parsed = kernelQuerySchema.safeParse(req.query ?? {});
     const version = parsed.success ? parsed.data.version : undefined;
     const rows = version ? repos.kernel.listByVersion(version) : repos.kernel.listAll();

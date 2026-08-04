@@ -1,34 +1,10 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
 import { config } from '../config.js';
 import { fail, maskPhone, ok, signToken, verifyToken } from '../lib/util.js';
 import { createRateLimitHook } from '../lib/rateLimit.js';
 import { guestSchema, phoneLoginSchema, sendSmsSchema } from '../schema.js';
 import { type Repos, USER_PUBLIC_COLS } from '../db/repo/index.js';
-
-/** 需登录接口的 preHandler */
-export async function requireAuth(
-  req: FastifyRequest,
-  reply: FastifyReply,
-): Promise<FastifyReply | undefined> {
-  const auth = req.headers.authorization || '';
-  if (!auth.startsWith('Bearer ')) {
-    reply.code(401).send(fail(401, '未登录'));
-    return;
-  }
-  const token = auth.slice(7).trim();
-  if (!token) {
-    reply.code(401).send(fail(401, '未登录'));
-    return;
-  }
-  const v = verifyToken(token);
-  if (!v) {
-    reply.code(401).send(fail(401, '登录已过期，请重新登录'));
-    return;
-  }
-  req.userId = v.userId;
-  return undefined;
-}
 
 /** 同一验证码最多允许的错误尝试次数，超过则作废并要求重新获取 */
 const MAX_CODE_ATTEMPTS = config.maxCodeAttempts;
@@ -156,13 +132,13 @@ export function authRoutes(
     },
   );
   /** 当前用户信息 */
-  app.get('/api/v1/auth/me', { preHandler: requireAuth }, async (req) => {
+  app.get('/api/v1/auth/me', { preHandler: app.authenticate }, async (req) => {
     const user = repos.users.findById(req.userId);
     return ok(user ?? null, user ? '获取成功' : '用户不存在');
   });
 
   /** 更新个人资料（当前支持昵称修改，字段级校验，nickname 1-30） */
-  app.patch('/api/v1/auth/profile', { preHandler: requireAuth }, async (req, reply) => {
+  app.patch('/api/v1/auth/profile', { preHandler: app.authenticate }, async (req, reply) => {
     const body = (req.body ?? {}) as { nickname?: string };
     const nickname = body.nickname === undefined ? undefined : String(body.nickname).trim();
     if (nickname !== undefined && (nickname.length < 1 || nickname.length > 30)) {

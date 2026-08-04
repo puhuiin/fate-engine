@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { fail, ok, parseId } from '../lib/util.js';
 import { archiveCreateSchema, archiveUpdateSchema } from '../schema.js';
 import type { Repos } from '../db/repo/index.js';
-import { requireAuth } from './auth.js';
 
 type ArchiveRow = Record<string, unknown>;
 
@@ -14,7 +13,7 @@ function archivePublic(row: ArchiveRow): ArchiveRow {
 
 export function archiveRoutes(app: FastifyInstance, repos: Repos): void {
   /** 创建生辰档案 */
-  app.post('/api/v1/archives', { preHandler: requireAuth }, async (req, reply) => {
+  app.post('/api/v1/archives', { preHandler: app.authenticate }, async (req, reply) => {
     const parsed = archiveCreateSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
@@ -39,13 +38,13 @@ export function archiveRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 我的档案列表 */
-  app.get('/api/v1/archives', { preHandler: requireAuth }, async (req) => {
+  app.get('/api/v1/archives', { preHandler: app.authenticate }, async (req) => {
     const rows = repos.archives.listByUserId(req.userId);
     return ok(rows.map(archivePublic));
   });
 
   /** 档案详情（仅本人可见） */
-  app.get('/api/v1/archives/:id', { preHandler: requireAuth }, async (req, reply) => {
+  app.get('/api/v1/archives/:id', { preHandler: app.authenticate }, async (req, reply) => {
     const id = parseId((req.params as { id: string }).id);
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
@@ -58,7 +57,7 @@ export function archiveRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 编辑档案（仅本人） */
-  app.patch('/api/v1/archives/:id', { preHandler: requireAuth }, async (req, reply) => {
+  app.patch('/api/v1/archives/:id', { preHandler: app.authenticate }, async (req, reply) => {
     const id = parseId((req.params as { id: string }).id);
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
@@ -100,7 +99,7 @@ export function archiveRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 删除档案（仅本人）：级联清理其测算记录、改运方案与订单 */
-  app.delete('/api/v1/archives/:id', { preHandler: requireAuth }, async (req, reply) => {
+  app.delete('/api/v1/archives/:id', { preHandler: app.authenticate }, async (req, reply) => {
     const id = parseId((req.params as { id: string }).id);
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));

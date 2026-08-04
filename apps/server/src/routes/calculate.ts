@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { fail, ok, parseId } from '../lib/util.js';
 import { calculateSchema } from '../schema.js';
 import type { Repos } from '../db/repo/index.js';
-import { requireAuth } from './auth.js';
 import { runL1 } from '../modules/l1/l1.js';
 import type { TimePrecision, SourceReliability } from '../modules/l1/rating.js';
 import { runL2 } from '../modules/l2/l2.js';
@@ -31,7 +30,7 @@ interface ArchiveRow {
 
 export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   /** 触发测算：阶段1 仅执行 L1 时空校正，返回九层报告结构 */
-  app.post('/api/v1/calculate', { preHandler: requireAuth }, async (req, reply) => {
+  app.post('/api/v1/calculate', { preHandler: app.authenticate }, async (req, reply) => {
     const parsed = calculateSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
@@ -100,7 +99,7 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 读取测算记录（仅本人） */
-  app.get('/api/v1/records/:id', { preHandler: requireAuth }, async (req, reply) => {
+  app.get('/api/v1/records/:id', { preHandler: app.authenticate }, async (req, reply) => {
     const id = parseId((req.params as { id: string }).id);
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
@@ -137,7 +136,7 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 某记录的已知风险项清单（仅本人）：L5/L6 属付费层，未解锁仅返回 locked 标记 */
-  app.get('/api/v1/records/:id/risks', { preHandler: requireAuth }, async (req, reply) => {
+  app.get('/api/v1/records/:id/risks', { preHandler: app.authenticate }, async (req, reply) => {
     const id = parseId((req.params as { id: string }).id);
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
@@ -159,7 +158,7 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 测算历史列表（可选分页：page/pageSize，缺省时返回全部保持兼容） */
-  app.get('/api/v1/records', { preHandler: requireAuth }, async (req, reply) => {
+  app.get('/api/v1/records', { preHandler: app.authenticate }, async (req, reply) => {
     const query = req.query as { page?: string; pageSize?: string };
     const clampInt = (v: unknown, fallback: number, max: number): number => {
       const n = Number(v);
@@ -178,7 +177,7 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 删除测算记录（仅本人）：级联清理改运方案、风险项与订单 */
-  app.delete('/api/v1/records/:id', { preHandler: requireAuth }, async (req, reply) => {
+  app.delete('/api/v1/records/:id', { preHandler: app.authenticate }, async (req, reply) => {
     const id = parseId((req.params as { id: string }).id);
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));

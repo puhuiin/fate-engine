@@ -12,6 +12,7 @@ import { planRoutes } from './routes/plans.js';
 import { kernelRoutes } from './routes/kernel.js';
 import { statsRoutes } from './routes/stats.js';
 import { fail, ok } from './lib/util.js';
+import { authenticate } from './lib/auth.js';
 import { createRateLimitHook } from './lib/rateLimit.js';
 import { searchCities } from './modules/l1/location.js';
 
@@ -88,6 +89,26 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       }),
     );
   }
+
+  /** 全局挂载鉴权 preHandler（路由以 { preHandler: app.authenticate } 声明） */
+  app.decorate('authenticate', authenticate);
+
+  /** 请求计时：onResponse 输出耗时与慢请求告警，供性能回归与生产定位 */
+  const SLOW_MS = Number(process.env.SLOW_REQUEST_MS) > 0 ? Number(process.env.SLOW_REQUEST_MS) : 800;
+  app.addHook('onResponse', async (req, reply) => {
+    const ms = reply.elapsedTime ?? 0;
+    if (ms > SLOW_MS) {
+      req.log.warn(
+        { path: req.url, method: req.method, statusCode: reply.statusCode, ms: Math.round(ms) },
+        '慢请求',
+      );
+    } else if (req.url.startsWith('/api')) {
+      req.log.info(
+        { path: req.url, method: req.method, statusCode: reply.statusCode, ms: Math.round(ms) },
+        '请求完成',
+      );
+    }
+  });
 
   /** 基础安全响应头：防 MIME 嗅探 / 点击劫持 / 页面内联泄露来源 */
   app.addHook('onRequest', async (req, reply) => {
