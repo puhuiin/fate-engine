@@ -8,9 +8,11 @@ import {
   getStatsOverview,
   guestLogin,
   listArchives,
+  listOrders,
   listRecords,
   setToken,
   type Archive,
+  type OrderRecord,
   type StatsOverview,
   type User,
 } from '../api/client';
@@ -32,14 +34,16 @@ export default function History() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [stats, setStats] = useState<StatsOverview | null>(null);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
 
   const load = async (targetPage: number) => {
     setLoadError('');
-    const [rec, arc, user, st] = await Promise.allSettled([
+    const [rec, arc, user, st, od] = await Promise.allSettled([
       listRecords(targetPage, PAGE_SIZE),
       listArchives(),
       getMe(),
       getStatsOverview(),
+      listOrders(),
     ]);
     if (rec.status === 'fulfilled') {
       const d = rec.value.data as unknown as { list?: RecordRow[]; total?: number };
@@ -50,6 +54,7 @@ export default function History() {
     if (arc.status === 'fulfilled') setArchives(arc.value.data as Archive[]);
     if (user.status === 'fulfilled') setMe(user.value.data);
     if (st.status === 'fulfilled') setStats(st.value.data);
+    if (od.status === 'fulfilled') setOrders(od.value.data);
     if (rec.status === 'rejected' && arc.status === 'rejected') {
       setLoadError('数据加载失败，请检查网络后重试');
     }
@@ -151,6 +156,40 @@ export default function History() {
                 {loadingMore ? '加载中…' : `加载更多（${records.length}/${total}）`}
               </button>
             </div>
+          )}
+
+          {orders.length > 0 && (
+            <>
+              <h3>我的订单</h3>
+              <table className="kv">
+                <thead>
+                  <tr>
+                    <th>订单号</th>
+                    <th>金额</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((o) => (
+                    <tr key={o.id}>
+                      <td className="mono">{o.order_no}</td>
+                      <td>¥{(o.amount_cents / 100).toFixed(2)}</td>
+                      <td>
+                        <span className={`pill order-status ${o.entitlement_status}`}>
+                          {o.entitlement_status === 'granted'
+                            ? '已解锁'
+                            : o.entitlement_status === 'expired'
+                              ? '已过期'
+                              : '待支付'}
+                        </span>
+                      </td>
+                      <td className="dim">{o.created_at}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </>
       )}

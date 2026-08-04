@@ -149,6 +149,7 @@ npm run test -w @fate/web
 |------|------|------|
 | POST | `/api/v1/orders` | 创建解锁订单（¥99） |
 | POST | `/api/v1/orders/:id/pay` | 支付解锁（渠道白名单校验） |
+| GET | `/api/v1/orders` | 我的订单历史（倒序，含关联测算摘要） |
 | GET | `/api/v1/orders/status/:recordId` | 订单状态查询 |
 
 ### 内核
@@ -201,7 +202,7 @@ fate-engine/
 
 - **密钥管理**：`FATE_SECRET` 为 JWT/签名唯一私密源，生产缺省拒绝启动（显式失败优于静默弱密钥）
 - **鉴权**：`timingSafeEqual` 恒定时间比较 + token payload 严格校验 + 长度上限（1024）+ `Bearer` 前缀严格校验
-- **速率限制**：进程内 IP 滑动窗口（零依赖自研），全局 300 次/分钟、认证/注册接口 20 次/分钟，超限统一 `429` ApiResp；代理部署时经 `TRUST_PROXY` 按真实客户端 IP 分桶（防代理后全站同桶误伤）
+- **速率限制**：进程内 IP 滑动窗口（零依赖自研），全局 300 次/分钟、认证/注册接口 20 次/分钟，超限统一 `429` ApiResp；响应携带 `X-RateLimit-Limit` / `X-RateLimit-Remaining` / `Retry-After` 标准限流头；代理部署时经 `TRUST_PROXY` 按真实客户端 IP 分桶（防代理后全站同桶误伤）
 - **数据库并发**：WAL 模式 + `busy_timeout=5000` + `synchronous=NORMAL`，兼顾并发写入与吞吐
 - **请求体上限**：64KB `bodyLimit`，超大 body 直接 `413`
 - **CORS 白名单**：`CORS_ORIGIN` 环境变量控制允许来源（生产建议显式配置，而非全开）

@@ -280,6 +280,21 @@ check('无 raw_json 记录同样标记 dataError', nullRec.status === 200 && nul
 const st = await call('GET', `/api/v1/orders/status/${record1}`, { token: tokenA });
 check('订单状态接口已解锁且无锁定层', st.json.data?.paidStatus === 1 && (st.json.data?.lockedLayers as unknown[]).length === 0);
 
+// 订单历史列表：当前用户全部订单倒序，剥离 user_id，包含关联记录摘要
+const orderList = await call('GET', `/api/v1/orders`, { token: tokenA });
+check(
+  '订单历史接口返回已支付订单且不含 user_id',
+  orderList.status === 200 &&
+    Array.isArray(orderList.json.data) &&
+    orderList.json.data.some((o: Record<string, unknown>) => o.order_no === ord1.json.data?.order?.order_no) &&
+    orderList.json.data.every((o: Record<string, unknown>) => o.user_id === undefined),
+);
+const crossOrderList = await call('GET', `/api/v1/orders`, { token: tokenB });
+check(
+  '订单历史仅返回本人订单（B 无 A 的订单）',
+  Array.isArray(crossOrderList.json.data) && crossOrderList.json.data.length === 0,
+);
+
 // ---------- 8b. 解锁后改运方案与风险项完整可见 ----------
 const plans = await call('GET', `/api/v1/records/${record1}/plans`, { token: tokenA });
 const totalPlans = plans.json.data?.total as number;
@@ -632,6 +647,19 @@ const rlHit = await rlApp.inject({ method: 'GET', url: '/api/v1/locations/search
 check(
   '限流响应为统一 ApiResp(code=429)',
   rlHit.statusCode === 429 && (rlHit.json() as { code: number }).code === 429,
+);
+check(
+  '限流响应携带 X-RateLimit-Limit/Remaining 头与 Retry-After',
+  rlHit.headers['x-ratelimit-limit'] === '3' &&
+    rlHit.headers['x-ratelimit-remaining'] === '0' &&
+    rlHit.headers['retry-after'] !== undefined,
+);
+const firstHeaders = (
+  await rlApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' })
+).headers;
+check(
+  '放行请求携带 X-RateLimit-Remaining 剩余额度',
+  firstHeaders['x-ratelimit-remaining'] !== undefined && firstHeaders['x-ratelimit-limit'] === '3',
 );
 rlDb.close();
 

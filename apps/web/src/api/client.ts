@@ -430,6 +430,16 @@ export interface OrderInfo {
   created_at: string;
 }
 
+export interface OrderRecord extends OrderInfo {
+  record_id: number | null;
+  calc_type: string | null;
+  record_paid_status: number | null;
+}
+
+export function listOrders(): Promise<ApiResp<OrderRecord[]>> {
+  return request('/api/v1/orders');
+}
+
 export interface UnlockOrderResp {
   order: OrderInfo;
   alreadyUnlocked: boolean;

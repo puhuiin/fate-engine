@@ -446,6 +446,28 @@ table.kv .link-btn:first-child {
   color: #8a8577;
 }
 
+/* 订单状态徽标 */
+.order-status.granted {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.order-status.expired {
+  background: #f0efe9;
+  color: #8a8577;
+  text-decoration: line-through;
+}
+
+.order-status.pending {
+  background: #fff3e0;
+  color: #b26a00;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
 table.kv {
   width: 100%;
   border-collapse: collapse;

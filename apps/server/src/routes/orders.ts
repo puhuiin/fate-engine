@@ -24,6 +24,12 @@ function orderPublic(o: OrderRow): OrderRow {
 }
 
 export function orderRoutes(app: FastifyInstance, repos: Repos): void {
+  /** 我的订单历史：全部订单倒序（含关联测算摘要），供「我的记录」页订单区展示 */
+  app.get('/api/v1/orders', { preHandler: app.authenticate }, async (req) => {
+    const rows = repos.orders.listByUser(req.userId);
+    return ok(rows.map(orderPublic));
+  });
+
   /** 为指定测算记录创建解锁订单（已付费直接返回已解锁） */
   app.post('/api/v1/orders', { preHandler: app.authenticate }, async (req, reply) => {
     const parsed = orderCreateSchema.safeParse(req.body ?? {});

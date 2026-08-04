@@ -49,6 +49,19 @@ export function createOrderRepo(db: Db) {
         )
         .get(recordId, userId) as Record<string, unknown> | undefined;
     },
+    /** 当前用户全部订单（含关联测算记录摘要），倒序 */
+    listByUser(userId: number, limit = 50) {
+      return db
+        .prepare(
+          `SELECT o.*, r.calc_type, r.paid_status AS record_paid_status
+           FROM order_pay o
+           LEFT JOIN calculate_record r ON o.record_id = r.id
+           WHERE o.user_id = ?
+           ORDER BY o.id DESC
+           LIMIT ?`,
+        )
+        .all(userId, limit) as Record<string, unknown>[];
+    },
     markGranted(id: number, channel: string): void {
       db.prepare(
         `UPDATE order_pay SET entitlement_status = 'granted', pay_channel = ? WHERE id = ?`,
