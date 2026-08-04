@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { fail, ok, parseId } from '../lib/util.js';
 import { archiveCreateSchema, archiveUpdateSchema } from '../schema.js';
-import type { Db } from '../db/client.js';
+import type { Repos } from '../db/repo/index.js';
 import { requireAuth } from './auth.js';
 
 type ArchiveRow = Record<string, unknown>;
@@ -12,7 +12,7 @@ function archivePublic(row: ArchiveRow): ArchiveRow {
   return rest;
 }
 
-export function archiveRoutes(app: FastifyInstance, db: Db): void {
+export function archiveRoutes(app: FastifyInstance, repos: Repos): void {
   /** 创建生辰档案 */
   app.post('/api/v1/archives', { preHandler: requireAuth }, async (req, reply) => {
     const parsed = archiveCreateSchema.safeParse(req.body);
@@ -20,39 +20,27 @@ export function archiveRoutes(app: FastifyInstance, db: Db): void {
       return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
     }
     const d = parsed.data;
-    const info = db
-      .prepare(
-        `INSERT INTO user_birth_archive
-         (user_id, gender, solar_date, solar_time, timezone_offset, longitude, latitude,
-          city_name, time_source, time_precision, source_reliability, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        req.userId,
-        d.gender ?? null,
-        d.solarDate,
-        d.solarTime ?? null,
-        d.timezoneOffset ?? 8,
-        d.longitude ?? null,
-        d.latitude ?? null,
-        d.cityName ?? null,
-        d.timeSource ?? null,
-        d.timePrecision,
-        d.sourceReliability,
-        d.note ?? null,
-      );
-    const id = Number(info.lastInsertRowid);
-    const archive = db
-      .prepare('SELECT * FROM user_birth_archive WHERE id = ?')
-      .get(id);
+    const id = repos.archives.insert({
+      userId: req.userId,
+      gender: d.gender ?? null,
+      solarDate: d.solarDate,
+      solarTime: d.solarTime ?? null,
+      timezoneOffset: d.timezoneOffset ?? 8,
+      longitude: d.longitude ?? null,
+      latitude: d.latitude ?? null,
+      cityName: d.cityName ?? null,
+      timeSource: d.timeSource ?? null,
+      timePrecision: d.timePrecision,
+      sourceReliability: d.sourceReliability,
+      note: d.note ?? null,
+    });
+    const archive = repos.archives.findById(id);
     return reply.send(ok(archivePublic(archive as ArchiveRow), '档案已创建'));
   });
 
   /** 我的档案列表 */
   app.get('/api/v1/archives', { preHandler: requireAuth }, async (req) => {
-    const rows = db
-      .prepare('SELECT * FROM user_birth_archive WHERE user_id = ? ORDER BY created_at DESC')
-      .all(req.userId) as ArchiveRow[];
+    const rows = repos.archives.listByUserId(req.userId);
     return ok(rows.map(archivePublic));
   });
 
@@ -62,9 +50,7 @@ export function archiveRoutes(app: FastifyInstance, db: Db): void {
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
     }
-    const archive = db
-      .prepare('SELECT * FROM user_birth_archive WHERE id = ? AND user_id = ?')
-      .get(id, req.userId);
+    const archive = repos.archives.findByUserIdAndId(id, req.userId);
     if (!archive) {
       return reply.send(fail(404, '档案不存在或无权访问'));
     }
@@ -81,9 +67,7 @@ export function archiveRoutes(app: FastifyInstance, db: Db): void {
     if (!parsed.success) {
       return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
     }
-    const existing = db
-      .prepare('SELECT * FROM user_birth_archive WHERE id = ? AND user_id = ?')
-      .get(id, req.userId) as { id: number } | undefined;
+    const existing = repos.archives.findByUserIdAndId<{ id: number }>(id, req.userId);
     if (!existing) {
       return reply.send(fail(404, '档案不存在或无权访问'));
     }
@@ -110,12 +94,8 @@ export function archiveRoutes(app: FastifyInstance, db: Db): void {
     if (fields.length === 0) {
       return reply.send(fail(400, '没有可更新的字段'));
     }
-    db.prepare(
-      `UPDATE user_birth_archive SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`,
-    ).run(...values, id, req.userId);
-    const archive = db
-      .prepare('SELECT * FROM user_birth_archive WHERE id = ?')
-      .get(id);
+    repos.archives.update(id, req.userId, { fields, values });
+    const archive = repos.archives.findById(id);
     return reply.send(ok(archivePublic(archive as ArchiveRow), '档案已更新'));
   });
 
@@ -125,27 +105,12 @@ export function archiveRoutes(app: FastifyInstance, db: Db): void {
     if (!id) {
       return reply.send(fail(400, '参数 id 不合法'));
     }
-    const existing = db
-      .prepare('SELECT id FROM user_birth_archive WHERE id = ? AND user_id = ?')
-      .get(id, req.userId);
+    const existing = repos.archives.findByUserIdAndId<{ id: number }>(id, req.userId);
     if (!existing) {
       return reply.send(fail(404, '档案不存在或无权访问'));
     }
-    const recordIds = (
-      db
-        .prepare('SELECT id FROM calculate_record WHERE archive_id = ? AND user_id = ?')
-        .all(id, req.userId) as Array<{ id: number }>
-    ).map((r) => r.id);
-    const tx = db.transaction(() => {
-      for (const rid of recordIds) {
-        db.prepare('DELETE FROM luck_plan WHERE record_id = ?').run(rid);
-        db.prepare('DELETE FROM risk_item WHERE record_id = ?').run(rid);
-        db.prepare('DELETE FROM order_pay WHERE record_id = ?').run(rid);
-      }
-      db.prepare('DELETE FROM calculate_record WHERE archive_id = ?').run(id);
-      db.prepare('DELETE FROM user_birth_archive WHERE id = ?').run(id);
-    });
-    tx();
+    const recordIds = repos.archives.recordIdsByArchive(id, req.userId);
+    repos.archives.deleteCascade(id, recordIds);
     return reply.send(ok({ removedRecords: recordIds.length }, '档案已删除'));
   });
 }

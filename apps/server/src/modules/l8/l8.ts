@@ -2,9 +2,8 @@
  * L8 七级分级改运执行方案（V13）
  * PRD 七级改运体系：环境布局 / 行为抉择 / 认知思维 / 习惯体系 /
  * 因果化解 / 信息维度重构 / 心性破执。
- * 每级基于六维评分与主卡点动态生成可落地条目，并落库 luck_plan 表。
+ * 每级基于六维评分与主卡点动态生成可落地条目（纯计算模块，落库由数据层完成）。
  */
-import type { Db } from '../../db/client.js';
 import type { BaziResult } from '../l2/bazi.js';
 import type { L4Output } from '../l4/l4.js';
 import type { L5Output } from '../l5/l5.js';
@@ -24,6 +23,25 @@ export interface LuckLevel {
 export interface L8Output {
   levels: LuckLevel[];
   note: string;
+}
+
+export interface PlanRowInput {
+  level: number;
+  title: string;
+  content: string;
+  execCycle: string;
+}
+
+/** 将 L8 七级方案输出扁平化为 luck_plan 落库行（纯映射，写库由数据层完成） */
+export function toPlanRows(l8: L8Output): PlanRowInput[] {
+  return l8.levels.flatMap((lv) =>
+    lv.items.map((it) => ({
+      level: lv.level,
+      title: it.title,
+      content: it.content,
+      execCycle: it.execCycle,
+    })),
+  );
 }
 
 const LEVEL_NAMES = [
@@ -188,16 +206,4 @@ export function runL8(l4: L4Output, l5: L5Output, bazi: BaziResult): L8Output {
     levels,
     note: `七级方案按「由外到内」排列：先改环境与行为（最快见效），再深入认知与心性（最持久）。日主${bazi.dayMaster.gan}（${bazi.dayMaster.wuxing}）提示的本性倾向已融入各条内容；执行时以 30 天为一个周期复盘迭代。`,
   };
-}
-
-/** 将七级方案落库 luck_plan 表（应在调用方事务内执行，避免记录与方案出现孤儿数据） */
-export function insertLuckPlans(db: Db, recordId: number, l8: L8Output): void {
-  const stmt = db.prepare(
-    'INSERT INTO luck_plan (record_id, level, title, content, exec_cycle) VALUES (?, ?, ?, ?, ?)',
-  );
-  for (const level of l8.levels) {
-    for (const item of level.items) {
-      stmt.run(recordId, level.level, item.title, item.content, item.execCycle);
-    }
-  }
 }

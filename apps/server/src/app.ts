@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import crypto from 'node:crypto';
 import type { Db } from './db/client.js';
+import { createRepos } from './db/repo/index.js';
 import { config } from './config.js';
 import { authRoutes } from './routes/auth.js';
 import { archiveRoutes } from './routes/archives.js';
@@ -165,17 +166,19 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     return ok(searchCities(q));
   });
 
+  const repos = createRepos(db);
+
   authRoutes(
     app,
-    db,
+    repos,
     opts.rateLimit === false ? undefined : createRateLimitHook({ max: AUTH_RATE_MAX, windowMs: RATE_WINDOW_MS }),
   );
-  archiveRoutes(app, db);
-  calculateRoutes(app, db);
-  orderRoutes(app, db);
-  planRoutes(app, db);
-  kernelRoutes(app, db);
-  statsRoutes(app, db);
+  archiveRoutes(app, repos);
+  calculateRoutes(app, repos);
+  orderRoutes(app, repos);
+  planRoutes(app, repos);
+  kernelRoutes(app, repos);
+  statsRoutes(app, repos);
 
   return app;
 }

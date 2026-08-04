@@ -180,9 +180,11 @@ fate-engine/
 │   │       ├── modules/
 │   │       │   ├── l1/       # 时空校正（dst 夏令时 / location / time / rating）
 │   │       │   ├── l2/       # 八字双流派
-│   │       │   ├── l3/ … l9/ # 后续各层，l6 含 risk.ts 风险落库
+│   │       │   ├── l3/ … l9/ # 后续各层，l6 含 risk 输出映射
+│   │       ├── db/
+│   │       │   ├── client.ts # better-sqlite3 连接与建表
+│   │       │   └── repo/     # Repository 数据访问层（users/archives/records/orders/plans/risks/sms/kernel/stats）
 │   │       ├── lib/          # util.ts（parseId / verifyToken / 签名）
-│   │       ├── db/           # better-sqlite3 连接与建表
 │   │       └── report.ts     # 九层报告聚合
 │   └── web/
 │       └── src/
@@ -207,6 +209,7 @@ fate-engine/
 - **防泄漏**：所有对外响应剥离内部字段（`user_id` / `raw_json` / 明文 phone）；`raw_json` 损坏时降级为 `dataError` 而非报错
 - **越权防护**：档案删除级联、记录列表 JOIN 均带 `user_id` 过滤；他人资源返回 404
 - **事务一致性**：测算写入（记录 + 计划 + 风险）由外层单一事务包裹，禁止嵌套事务
+- **数据访问分层**：SQL 读写全部收敛到 `db/repo/` Repository 层，路由层只做鉴权、校验与编排；模块层（L1–L9）保持纯计算，落库行映射（`toPlanRows` / `toRiskRows`）由模块层导出
 - **可观测性**：`X-Request-Id` 全链路回显（UUID），访问日志与错误日志带 requestId 与路径；5xx 记录完整堆栈、4xx 记录告警，客户端仅收到收敛文案
 - **缓存策略**：鉴权/动态数据接口统一 `Cache-Control: no-store`，防止敏感数据进入代理缓存
 

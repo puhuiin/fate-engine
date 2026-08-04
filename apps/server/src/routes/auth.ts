@@ -4,7 +4,7 @@ import { config } from '../config.js';
 import { fail, maskPhone, ok, signToken, verifyToken } from '../lib/util.js';
 import { createRateLimitHook } from '../lib/rateLimit.js';
 import { guestSchema, phoneLoginSchema, sendSmsSchema } from '../schema.js';
-import type { Db } from '../db/client.js';
+import { type Repos, USER_PUBLIC_COLS } from '../db/repo/index.js';
 
 /** 需登录接口的 preHandler */
 export async function requireAuth(
@@ -33,13 +33,9 @@ export async function requireAuth(
 /** 同一验证码最多允许的错误尝试次数，超过则作废并要求重新获取 */
 const MAX_CODE_ATTEMPTS = config.maxCodeAttempts;
 
-/** 用户对外字段白名单：剥离 phone（明文）等内部字段 */
-const USER_PUBLIC_COLS =
-  'id, phone_masked, nickname, register_channel, member_level, member_expire_at, created_at';
-
 export function authRoutes(
   app: FastifyInstance,
-  db: Db,
+  repos: Repos,
   authRateLimit?: ReturnType<typeof createRateLimitHook>,
 ): void {
   /** 游客临时测算 */
@@ -52,15 +48,8 @@ export function authRoutes(
         return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
       }
       const { nickname } = parsed.data;
-      const info = db
-        .prepare('INSERT INTO sys_user (nickname, register_channel) VALUES (?, ?)')
-        .run(nickname ?? '游客', 'guest');
-      const userId = Number(info.lastInsertRowid);
-      const user = db
-        .prepare(
-          'SELECT id, phone_masked, nickname, register_channel, member_level, created_at FROM sys_user WHERE id = ?',
-        )
-        .get(userId);
+      const userId = repos.users.insertGuest(nickname ?? '游客');
+      const user = repos.users.findById(userId);
       return reply.send(ok({ user, token: signToken(userId) }, '游客登录成功'));
     },
   );
@@ -75,32 +64,20 @@ export function authRoutes(
         return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
       }
       const { phone, channel } = parsed.data;
-      db.prepare("DELETE FROM sms_code WHERE phone = ? AND expires_at <= datetime('now')").run(phone);
-      const recent = db
-        .prepare(
-          `SELECT created_at FROM sms_code
-         WHERE phone = ? AND used = 0 AND expires_at > datetime('now')
-           AND created_at > datetime('now', '-60 seconds')
-         ORDER BY id DESC LIMIT 1`,
-        )
-        .get(phone) as { created_at: string } | undefined;
+      repos.sms.deleteExpiredByPhone(phone);
+      const recent = repos.sms.latestUnusedInWindow(phone);
       if (recent) {
         return reply.send(fail(429, '验证码发送频繁，请 60 秒后再试'));
       }
       // 重发窗口已过：作废历史未用验证码，避免同一手机号同时存在多个有效码
-      db.prepare('UPDATE sms_code SET used = 1 WHERE phone = ? AND used = 0').run(phone);
+      repos.sms.invalidateAllUnused(phone);
 
       const code = String(crypto.randomInt(100000, 1000000));
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
         .toISOString()
         .replace('T', ' ')
         .slice(0, 19);
-      db.prepare('INSERT INTO sms_code (phone, code, expires_at, channel) VALUES (?, ?, ?, ?)').run(
-        phone,
-        code,
-        expiresAt,
-        channel,
-      );
+      repos.sms.insert(phone, code, expiresAt, channel);
 
       const devMode = process.env.NODE_ENV !== 'production';
       return reply.send(
@@ -122,21 +99,13 @@ export function authRoutes(
         return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
       }
       const { phone, code, nickname, mergeGuestToken } = parsed.data;
-      const pending = db
-        .prepare(
-          `SELECT * FROM sms_code
-           WHERE phone = ? AND used = 0 AND expires_at > datetime('now') AND channel = 'login'
-           ORDER BY id DESC LIMIT 1`,
-        )
-        .get(phone) as
-        | (Record<string, unknown> & { id: number; code: string; fail_count?: number })
-        | undefined;
+      const pending = repos.sms.findLatestLogin(phone);
       if (!pending || pending.code !== code) {
         if (pending) {
           const tried = Number(pending.fail_count ?? 0) + 1;
-          db.prepare('UPDATE sms_code SET fail_count = ? WHERE id = ?').run(tried, pending.id);
+          repos.sms.incrementFailCount(pending.id, tried);
           if (tried >= MAX_CODE_ATTEMPTS) {
-            db.prepare('UPDATE sms_code SET used = 1 WHERE id = ?').run(pending.id);
+            repos.sms.markUsed(pending.id);
           }
         }
         return reply.send(fail(403, '验证码错误或已过期'));
@@ -144,19 +113,12 @@ export function authRoutes(
       if (Number(pending.fail_count ?? 0) >= MAX_CODE_ATTEMPTS) {
         return reply.send(fail(403, '尝试次数过多，请重新获取验证码'));
       }
-      db.prepare('UPDATE sms_code SET used = 1 WHERE id = ?').run(pending.id);
+      repos.sms.markUsed(pending.id);
 
-      let user = db
-        .prepare(`SELECT ${USER_PUBLIC_COLS} FROM sys_user WHERE phone = ?`)
-        .get(phone) as (Record<string, unknown> & { id: number }) | undefined;
+      let user = repos.users.findByPhone(phone);
       if (!user) {
-        const info = db
-          .prepare(
-            'INSERT INTO sys_user (phone, phone_masked, nickname, register_channel) VALUES (?, ?, ?, ?)',
-          )
-          .run(phone, maskPhone(phone), nickname ?? `用户${phone.slice(-4)}`, 'phone');
-        const userId = Number(info.lastInsertRowid);
-        user = db.prepare(`SELECT ${USER_PUBLIC_COLS} FROM sys_user WHERE id = ?`).get(userId) as typeof user;
+        const userId = repos.users.insertPhoneUser(phone, maskPhone(phone), nickname ?? `用户${phone.slice(-4)}`);
+        user = repos.users.findById(userId);
       }
       if (!user) {
         return reply.send(fail(500, '用户创建失败'));
@@ -168,14 +130,14 @@ export function authRoutes(
       if (mergeGuestToken) {
         const guest = verifyToken(mergeGuestToken);
         if (guest && guest.userId !== user.id) {
-          const tx = db.transaction(() => {
-            const arch = db
+          const tx = repos.db.transaction(() => {
+            const arch = repos.db
               .prepare('UPDATE user_birth_archive SET user_id = ? WHERE user_id = ?')
               .run(user.id, guest.userId);
-            const rec = db
+            const rec = repos.db
               .prepare('UPDATE calculate_record SET user_id = ? WHERE user_id = ?')
               .run(user.id, guest.userId);
-            db.prepare('UPDATE order_pay SET user_id = ? WHERE user_id = ?').run(
+            repos.db.prepare('UPDATE order_pay SET user_id = ? WHERE user_id = ?').run(
               user.id,
               guest.userId,
             );
@@ -195,11 +157,7 @@ export function authRoutes(
   );
   /** 当前用户信息 */
   app.get('/api/v1/auth/me', { preHandler: requireAuth }, async (req) => {
-    const user = db
-      .prepare(
-        'SELECT id, phone_masked, nickname, register_channel, member_level, member_expire_at, created_at FROM sys_user WHERE id = ?',
-      )
-      .get(req.userId);
+    const user = repos.users.findById(req.userId);
     return ok(user ?? null, user ? '获取成功' : '用户不存在');
   });
 
@@ -213,12 +171,8 @@ export function authRoutes(
     if (nickname === undefined) {
       return reply.send(fail(400, '没有可更新的字段'));
     }
-    db.prepare('UPDATE sys_user SET nickname = ? WHERE id = ?').run(nickname, req.userId);
-    const user = db
-      .prepare(
-        `SELECT ${USER_PUBLIC_COLS} FROM sys_user WHERE id = ?`,
-      )
-      .get(req.userId);
+    repos.users.updateNickname(req.userId, nickname);
+    const user = repos.users.findById(req.userId);
     return reply.send(ok(user, '资料已更新'));
   });
 }
