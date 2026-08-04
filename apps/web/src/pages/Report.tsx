@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useReportData } from '../hooks/useReportData';
 import { useReportExport } from '../hooks/useReportExport';
+import { Skeleton, SkeletonCard, SkeletonRows } from '../components/Skeleton';
 import { LAYER_NAMES, MODULE_HINT } from '../layers';
 import {
   Layer1,
@@ -48,7 +49,18 @@ export default function Report() {
       </div>
     );
   }
-  if (loading) return <div className="card">读取报告中…</div>;
+  if (loading) {
+    return (
+      <SkeletonCard>
+        <div className="skeleton-field">
+          <Skeleton style={{ width: '45%', height: 22 }} />
+          <Skeleton style={{ width: '75%' }} />
+          <Skeleton style={{ width: '60%' }} />
+        </div>
+        <SkeletonRows rows={4} cols={3} />
+      </SkeletonCard>
+    );
+  }
   if (loadError) {
     return (
       <div className="card">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   calculate,
+  cancelOrder,
   deleteArchive,
   deleteRecord,
   getMe,
@@ -20,6 +21,7 @@ import LoginPanel from '../components/LoginPanel';
 import StatsBar from '../components/StatsBar';
 import ArchivesTable from '../components/ArchivesTable';
 import RecordsTable, { type RecordRow } from '../components/RecordsTable';
+import { SkeletonRows } from '../components/Skeleton';
 
 const PAGE_SIZE = 20;
 
@@ -33,11 +35,13 @@ export default function History() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [loadMoreError, setLoadMoreError] = useState('');
   const [stats, setStats] = useState<StatsOverview | null>(null);
   const [orders, setOrders] = useState<OrderRecord[]>([]);
 
   const load = async (targetPage: number, isLoadMore = false) => {
     setLoadError('');
+    setLoadMoreError('');
     const [rec, arc, user, st, od] = await Promise.allSettled([
       listRecords(targetPage, PAGE_SIZE),
       listArchives(),
@@ -56,7 +60,7 @@ export default function History() {
     if (st.status === 'fulfilled' && st.value.code === 200) setStats(st.value.data);
     if (od.status === 'fulfilled' && od.value.code === 200) setOrders(od.value.data ?? []);
     if (rec.status === 'rejected' || (rec.status === 'fulfilled' && rec.value.code !== 200)) {
-      if (isLoadMore) window.alert('加载更多失败，请稍后重试');
+      if (isLoadMore) setLoadMoreError('加载更多失败，请稍后重试');
       else setLoadError('数据加载失败，请检查网络后重试');
     }
     setLoading(false);
@@ -122,6 +126,20 @@ export default function History() {
     }
   };
 
+  const cancelOne = async (o: OrderRecord) => {
+    if (!window.confirm('确定取消该待支付订单？取消后需重新下单才能解锁深度报告。')) return;
+    try {
+      const res = await cancelOrder(o.id);
+      if (res.code !== 200) {
+        window.alert(res.msg || '取消失败，请稍后重试');
+        return;
+      }
+      await load(1);
+    } catch {
+      window.alert('取消失败，请稍后重试');
+    }
+  };
+
   return (
     <div className="card">
       <h2>我的测算记录</h2>
@@ -130,7 +148,11 @@ export default function History() {
 
       {stats && <StatsBar stats={stats} />}
 
-      {loading && <p className="dim">记录加载中…</p>}
+      {loading && (
+        <div className="skeleton-block">
+          <SkeletonRows rows={4} cols={3} />
+        </div>
+      )}
       {!loading && loadError && (
         <p className="error">
           {loadError}{' '}
@@ -160,6 +182,7 @@ export default function History() {
               </button>
             </div>
           )}
+          {loadMoreError && <p className="error">{loadMoreError}</p>}
 
           {orders.length > 0 && (
             <>
@@ -171,6 +194,7 @@ export default function History() {
                     <th>金额</th>
                     <th>状态</th>
                     <th>创建时间</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -188,6 +212,13 @@ export default function History() {
                         </span>
                       </td>
                       <td className="dim">{o.created_at}</td>
+                      <td>
+                        {o.entitlement_status === 'pending' && (
+                          <button className="link-btn danger" onClick={() => cancelOne(o)}>
+                            取消订单
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

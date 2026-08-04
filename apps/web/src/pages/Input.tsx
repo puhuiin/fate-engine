@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Skeleton } from '../components/Skeleton';
 import {
   calculate,
   createArchive,
@@ -303,7 +304,13 @@ export default function Input() {
 
       {error && <p className="error">{error}</p>}
 
-      {editing && <p className="dim">正在读取档案…</p>}
+      {editing && (
+        <div className="skeleton-field">
+          <Skeleton style={{ width: '30%' }} />
+          <Skeleton style={{ width: '100%', height: 40 }} />
+          <Skeleton style={{ width: '100%', height: 40 }} />
+        </div>
+      )}
 
       <button type="submit" className="primary" disabled={busy || editing}>
         {editing ? '读取中…' : busy ? '演算中…' : editId ? '保存并重新测算' : '开始测算'}

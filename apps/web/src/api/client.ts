@@ -479,6 +479,10 @@ export function payOrder(
   });
 }
 
+export function cancelOrder(orderId: number): Promise<ApiResp<OrderInfo>> {
+  return request(`/api/v1/orders/${orderId}/cancel`, { method: 'POST' });
+}
+
 export interface PlanItem {
   id: number;
   level: number;

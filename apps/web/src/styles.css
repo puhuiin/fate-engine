@@ -8,6 +8,62 @@
   --line: #e6dfcf;
 }
 
+/* 骨架屏 */
+.skeleton {
+  display: inline-block;
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #ece5d2 25%, #f7f1e0 37%, #ece5d2 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.skeleton-block {
+  padding: 22px 24px;
+}
+
+.skeleton-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 12px;
+}
+
+.skeleton-row {
+  display: flex;
+  gap: 12px;
+}
+
+.skeleton-row .skeleton {
+  flex: 1;
+}
+
+.skeleton-row .skeleton:first-child {
+  flex: 0 0 32%;
+}
+
+.skeleton-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 16px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
