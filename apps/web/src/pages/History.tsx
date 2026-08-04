@@ -5,13 +5,16 @@ import {
   deleteArchive,
   deleteRecord,
   getMe,
+  getStatsOverview,
   guestLogin,
   listArchives,
   listRecords,
   phoneLogin,
   sendSmsCode,
   setToken,
+  updateProfile,
   type Archive,
+  type StatsOverview,
 } from '../api/client';
 
 interface RecordRow {
@@ -38,15 +41,19 @@ export default function History() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [stats, setStats] = useState<StatsOverview | null>(null);
+  const [editNick, setEditNick] = useState(false);
+  const [nickDraft, setNickDraft] = useState('');
 
   const PAGE_SIZE = 20;
 
   const load = async (targetPage: number) => {
     setLoadError('');
-    const [rec, arc, user] = await Promise.allSettled([
+    const [rec, arc, user, st] = await Promise.allSettled([
       listRecords(targetPage, PAGE_SIZE),
       listArchives(),
       getMe(),
+      getStatsOverview(),
     ]);
     if (rec.status === 'fulfilled') {
       const d = rec.value.data as unknown as { list?: RecordRow[]; total?: number };
@@ -57,7 +64,11 @@ export default function History() {
       setPage(targetPage);
     }
     if (arc.status === 'fulfilled') setArchives(arc.value.data as Archive[]);
-    if (user.status === 'fulfilled') setMe(user.value.data);
+    if (user.status === 'fulfilled') {
+      setMe(user.value.data);
+      setNickDraft(user.value.data?.nickname ?? '');
+    }
+    if (st.status === 'fulfilled') setStats(st.value.data);
     if (rec.status === 'rejected' && arc.status === 'rejected') {
       setLoadError('数据加载失败，请检查网络后重试');
     }
@@ -170,6 +181,25 @@ export default function History() {
     }
   };
 
+  const saveNickname = async () => {
+    const nickname = nickDraft.trim();
+    if (!nickname || nickname.length > 30) {
+      setSmsMsg('昵称需为 1-30 个字符');
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateProfile({ nickname });
+      setSmsMsg('昵称已更新');
+      setEditNick(false);
+      await load(1);
+    } catch {
+      setSmsMsg('昵称更新失败，请稍后重试');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="card">
       <h2>我的测算记录</h2>
@@ -177,7 +207,37 @@ export default function History() {
       <div className="login-box">
         {me?.phone_masked ? (
           <p className="hint">
-            已登录：{me.nickname}（{me.phone_masked}）
+            已登录：
+            {editNick ? (
+              <>
+                <input
+                  className="nick-input"
+                  maxLength={30}
+                  value={nickDraft}
+                  onChange={(e) => setNickDraft(e.target.value)}
+                  placeholder="昵称"
+                />
+                <button className="link-btn" disabled={busy} onClick={saveNickname}>
+                  保存
+                </button>
+                <button
+                  className="link-btn"
+                  onClick={() => {
+                    setEditNick(false);
+                    setNickDraft(me.nickname ?? '');
+                  }}
+                >
+                  取消
+                </button>
+              </>
+            ) : (
+              <>
+                {me.nickname}（{me.phone_masked}）
+                <button className="link-btn" onClick={() => setEditNick(true)}>
+                  改昵称
+                </button>
+              </>
+            )}
           </p>
         ) : (
           <div className="login-form">
@@ -210,6 +270,33 @@ export default function History() {
           </div>
         )}
       </div>
+
+      {stats && (
+        <div className="stats-bar">
+          <div className="stat-item">
+            <span className="stat-num">{stats.archivesCount}</span>
+            <span className="stat-label">档案</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-num">{stats.totalRecords}</span>
+            <span className="stat-label">测算</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-num">{stats.unlockRate}%</span>
+            <span className="stat-label">解锁率</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-num">
+              {stats.totalPlans > 0 ? `${stats.planCompletionRate}%` : '-'}
+            </span>
+            <span className="stat-label">改运完成</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-num">{stats.highRiskCount}</span>
+            <span className="stat-label">重点风险</span>
+          </div>
+        </div>
+      )}
 
       {loading && <p className="dim">记录加载中…</p>}
       {!loading && loadError && (

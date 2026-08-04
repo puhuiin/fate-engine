@@ -172,4 +172,23 @@ export function authRoutes(
       .get(req.userId);
     return ok(user ?? null, user ? '获取成功' : '用户不存在');
   });
+
+  /** 更新个人资料（当前支持昵称修改，字段级校验，nickname 1-30） */
+  app.patch('/api/v1/auth/profile', { preHandler: requireAuth }, async (req, reply) => {
+    const body = (req.body ?? {}) as { nickname?: string };
+    const nickname = body.nickname === undefined ? undefined : String(body.nickname).trim();
+    if (nickname !== undefined && (nickname.length < 1 || nickname.length > 30)) {
+      return reply.send(fail(400, '昵称长度需为 1-30 个字符'));
+    }
+    if (nickname === undefined) {
+      return reply.send(fail(400, '没有可更新的字段'));
+    }
+    db.prepare('UPDATE sys_user SET nickname = ? WHERE id = ?').run(nickname, req.userId);
+    const user = db
+      .prepare(
+        `SELECT ${USER_PUBLIC_COLS} FROM sys_user WHERE id = ?`,
+      )
+      .get(req.userId);
+    return reply.send(ok(user, '资料已更新'));
+  });
 }

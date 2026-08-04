@@ -768,6 +768,32 @@ const idEcho = await app.inject({
 });
 check('客户端传入 X-Request-Id 被透传回显', idEcho.headers['x-request-id'] === 'trace-abc-123');
 
+// ---------- 12. 统计看板 + 个人资料编辑 ----------
+const stats = await call('GET', '/api/v1/stats/overview', { token: tokenA });
+const statsD = stats.json.data as Record<string, number | string> | null;
+check(
+  '统计看板返回聚合指标（档案/记录/计划）',
+  stats.status === 200 &&
+    statsD !== null &&
+    typeof statsD.archivesCount === 'number' &&
+    typeof statsD.totalRecords === 'number' &&
+    typeof statsD.totalPlans === 'number',
+);
+const nickRes = await call('PATCH', '/api/v1/auth/profile', {
+  token: tokenA,
+  body: { nickname: '新昵称甲' },
+});
+check('修改昵称成功并回显', nickRes.status === 200 && nickRes.json.data?.nickname === '新昵称甲');
+const nickShort = await call('PATCH', '/api/v1/auth/profile', {
+  token: tokenA,
+  body: { nickname: '   ' },
+});
+check('空白昵称被拒绝 400', nickShort.status === 400 && nickShort.json.code === 400);
+const meAfter = await call('GET', '/api/v1/auth/me', { token: tokenA });
+check('修改昵称持久化（me 接口可见）', meAfter.json.data?.nickname === '新昵称甲');
+const statsAnon = await call('GET', '/api/v1/stats/overview');
+check('统计看板未登录 401', statsAnon.status === 401 && statsAnon.json.code === 401);
+
 db.close();
 
 if (failed > 0) {

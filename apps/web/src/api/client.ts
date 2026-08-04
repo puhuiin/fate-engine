@@ -291,6 +291,28 @@ export function getMe(): Promise<ApiResp<User | null>> {
   return request('/api/v1/auth/me');
 }
 
+export function updateProfile(
+  body: { nickname: string },
+): Promise<ApiResp<User | null>> {
+  return request('/api/v1/auth/profile', { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+export interface StatsOverview {
+  archivesCount: number;
+  totalRecords: number;
+  paidRecords: number;
+  unlockRate: number;
+  totalPlans: number;
+  donePlans: number;
+  planCompletionRate: number;
+  highRiskCount: number;
+  lastRecordAt: string | null;
+}
+
+export function getStatsOverview(): Promise<ApiResp<StatsOverview>> {
+  return request('/api/v1/stats/overview');
+}
+
 export function searchCities(q: string): Promise<ApiResp<City[]>> {
   return request(`/api/v1/locations/search?q=${encodeURIComponent(q)}`);
 }

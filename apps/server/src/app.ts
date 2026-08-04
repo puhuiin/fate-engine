@@ -8,6 +8,7 @@ import { calculateRoutes } from './routes/calculate.js';
 import { orderRoutes } from './routes/orders.js';
 import { planRoutes } from './routes/plans.js';
 import { kernelRoutes } from './routes/kernel.js';
+import { statsRoutes } from './routes/stats.js';
 import { fail, ok } from './lib/util.js';
 import { createRateLimitHook } from './lib/rateLimit.js';
 import { searchCities } from './modules/l1/location.js';
@@ -156,6 +157,7 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   orderRoutes(app, db);
   planRoutes(app, db);
   kernelRoutes(app, db);
+  statsRoutes(app, db);
 
   return app;
 }

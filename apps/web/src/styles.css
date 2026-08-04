@@ -197,6 +197,54 @@ body {
   cursor: not-allowed;
 }
 
+/* 使用概览统计条 */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin: 16px 0;
+  padding: 14px 12px;
+  background: #faf4e4;
+  border: 1px solid #e8dcc0;
+  border-radius: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.stat-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--gold);
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #8a7b5c;
+}
+
+/* 昵称内联编辑 */
+.nick-input {
+  border: 1px solid #d8cba6;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 14px;
+  margin-right: 6px;
+  width: 140px;
+}
+
+@media (max-width: 560px) {
+  .stats-bar {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 .link-btn {
   background: none;
   border: none;
