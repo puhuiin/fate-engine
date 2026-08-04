@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { fail, ok, parseId } from '../lib/util.js';
+import { ok } from '../lib/util.js';
+import { ApiError } from '../lib/errors.js';
+import { assertSchema, requireIdParam } from '../lib/http.js';
 import { archiveCreateSchema, archiveUpdateSchema } from '../schema.js';
 import type { Repos } from '../db/repo/index.js';
 
@@ -14,11 +16,7 @@ function archivePublic(row: ArchiveRow): ArchiveRow {
 export function archiveRoutes(app: FastifyInstance, repos: Repos): void {
   /** 创建生辰档案 */
   app.post('/api/v1/archives', { preHandler: app.authenticate }, async (req, reply) => {
-    const parsed = archiveCreateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
-    }
-    const d = parsed.data;
+    const d = assertSchema(archiveCreateSchema, req.body);
     const id = repos.archives.insert({
       userId: req.userId,
       gender: d.gender ?? null,
@@ -44,33 +42,23 @@ export function archiveRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 档案详情（仅本人可见） */
-  app.get('/api/v1/archives/:id', { preHandler: app.authenticate }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
+  app.get('/api/v1/archives/:id', { preHandler: app.authenticate }, async (req) => {
+    const id = requireIdParam(req, 'id');
     const archive = repos.archives.findByUserIdAndId(id, req.userId);
     if (!archive) {
-      return reply.send(fail(404, '档案不存在或无权访问'));
+      throw new ApiError(404, '档案不存在或无权访问');
     }
     return ok(archivePublic(archive as ArchiveRow));
   });
 
   /** 编辑档案（仅本人） */
   app.patch('/api/v1/archives/:id', { preHandler: app.authenticate }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
-    const parsed = archiveUpdateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
-    }
+    const id = requireIdParam(req, 'id');
+    const d = assertSchema(archiveUpdateSchema, req.body);
     const existing = repos.archives.findByUserIdAndId<{ id: number }>(id, req.userId);
     if (!existing) {
-      return reply.send(fail(404, '档案不存在或无权访问'));
+      throw new ApiError(404, '档案不存在或无权访问');
     }
-    const d = parsed.data;
     const fields: string[] = [];
     const values: Array<string | number | null> = [];
     const assign = (col: string, val: string | number | null | undefined) => {
@@ -91,7 +79,7 @@ export function archiveRoutes(app: FastifyInstance, repos: Repos): void {
     assign('source_reliability', d.sourceReliability);
     assign('note', d.note);
     if (fields.length === 0) {
-      return reply.send(fail(400, '没有可更新的字段'));
+      throw new ApiError(400, '没有可更新的字段');
     }
     repos.archives.update(id, req.userId, { fields, values });
     const archive = repos.archives.findById(id);
@@ -100,13 +88,10 @@ export function archiveRoutes(app: FastifyInstance, repos: Repos): void {
 
   /** 删除档案（仅本人）：级联清理其测算记录、改运方案与订单 */
   app.delete('/api/v1/archives/:id', { preHandler: app.authenticate }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
+    const id = requireIdParam(req, 'id');
     const existing = repos.archives.findByUserIdAndId<{ id: number }>(id, req.userId);
     if (!existing) {
-      return reply.send(fail(404, '档案不存在或无权访问'));
+      throw new ApiError(404, '档案不存在或无权访问');
     }
     const recordIds = repos.archives.recordIdsByArchive(id, req.userId);
     repos.archives.deleteCascade(id, recordIds);

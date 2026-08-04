@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
 import { config } from '../config.js';
-import { fail, ok, parseId } from '../lib/util.js';
+import { ok } from '../lib/util.js';
+import { ApiError } from '../lib/errors.js';
+import { assertSchema, requireIdParam } from '../lib/http.js';
 import type { Repos } from '../db/repo/index.js';
 import { lockedLayers } from '../report.js';
 import { orderCreateSchema, orderPaySchema } from '../schema.js';
@@ -32,14 +34,10 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
 
   /** 为指定测算记录创建解锁订单（已付费直接返回已解锁） */
   app.post('/api/v1/orders', { preHandler: app.authenticate }, async (req, reply) => {
-    const parsed = orderCreateSchema.safeParse(req.body ?? {});
-    if (!parsed.success) {
-      return reply.send(fail(400, parsed.error.issues[0]?.message ?? 'recordId 参数错误'));
-    }
-    const recordId = parsed.data.recordId;
+    const { recordId } = assertSchema(orderCreateSchema, req.body ?? {}, 'recordId 参数错误');
     const record = repos.records.findMetaById(recordId, req.userId);
     if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
+      throw new ApiError(404, '记录不存在或无权访问');
     }
     if (record.paid_status === 1) {
       return reply.send(ok({ alreadyUnlocked: true, paidStatus: 1 }, '已解锁'));
@@ -71,17 +69,14 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
    * 生产环境替换为第三方支付回调签名校验，成功后调用本逻辑。
    */
   app.post('/api/v1/orders/:id/pay', { preHandler: app.authenticate }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
-    const parsed = orderPaySchema.safeParse(req.body ?? {});
-    if (!parsed.success) {
-      return reply.send(fail(400, 'pay_channel 不合法（mock/wechat/alipay）'));
-    }
-    const channel = parsed.data.channel;
+    const id = requireIdParam(req, 'id');
+    const { channel } = assertSchema(
+      orderPaySchema,
+      req.body ?? {},
+      'pay_channel 不合法（mock/wechat/alipay）',
+    );
     if (!PAY_CHANNELS.has(channel)) {
-      return reply.send(fail(400, 'pay_channel 不合法（mock/wechat/alipay）'));
+      throw new ApiError(400, 'pay_channel 不合法（mock/wechat/alipay）');
     }
     const order = repos.orders.findByIdAndUser<
       Record<string, unknown> & {
@@ -92,20 +87,20 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
       }
     >(id, req.userId);
     if (!order) {
-      return reply.send(fail(404, '订单不存在或无权访问'));
+      throw new ApiError(404, '订单不存在或无权访问');
     }
     if (order.entitlement_status === 'granted') {
       return reply.send(ok({ order: orderPublic(order), paidStatus: 1 }, '订单已支付'));
     }
     if (order.entitlement_status === 'expired') {
-      return reply.send(fail(410, '订单已过期，请重新下单'));
+      throw new ApiError(410, '订单已过期，请重新下单');
     }
     if (!order.record_id) {
-      return reply.send(fail(400, '订单未关联测算记录'));
+      throw new ApiError(400, '订单未关联测算记录');
     }
     if (repos.orders.isExpired(order.created_at, ORDER_TTL_MS)) {
       repos.orders.markExpired(order.id);
-      return reply.send(fail(410, '订单已过期，请重新下单'));
+      throw new ApiError(410, '订单已过期，请重新下单');
     }
 
     const rec = repos.db
@@ -136,13 +131,10 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
     '/api/v1/orders/status/:recordId',
     { preHandler: app.authenticate },
     async (req, reply) => {
-      const recordId = parseId((req.params as { recordId: string }).recordId);
-      if (!recordId) {
-        return reply.send(fail(400, '参数 recordId 不合法'));
-      }
+      const recordId = requireIdParam(req, 'recordId');
       const record = repos.records.findMetaById(recordId, req.userId);
       if (!record) {
-        return reply.send(fail(404, '记录不存在或无权访问'));
+        throw new ApiError(404, '记录不存在或无权访问');
       }
       const order = repos.orders.latestByRecord(recordId, req.userId);
       return reply.send(

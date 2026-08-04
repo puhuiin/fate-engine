@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
 import { config } from '../config.js';
-import { fail, maskPhone, ok, signToken, verifyToken } from '../lib/util.js';
+import { maskPhone, ok, signToken, verifyToken } from '../lib/util.js';
+import { ApiError } from '../lib/errors.js';
+import { assertSchema } from '../lib/http.js';
 import { createRateLimitHook } from '../lib/rateLimit.js';
-import { guestSchema, phoneLoginSchema, sendSmsSchema } from '../schema.js';
+import { guestSchema, phoneLoginSchema, profileUpdateSchema, sendSmsSchema } from '../schema.js';
 import { type Repos } from '../db/repo/index.js';
 
 /** 同一验证码最多允许的错误尝试次数，超过则作废并要求重新获取 */
@@ -19,11 +21,7 @@ export function authRoutes(
     '/api/v1/auth/guest',
     authRateLimit ? { onRequest: authRateLimit } : {},
     async (req, reply) => {
-      const parsed = guestSchema.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
-      }
-      const { nickname } = parsed.data;
+      const { nickname } = assertSchema(guestSchema, req.body ?? {});
       const userId = repos.users.insertGuest(nickname ?? '游客');
       const user = repos.users.findById(userId);
       return reply.send(ok({ user, token: signToken(userId) }, '游客登录成功'));
@@ -35,15 +33,11 @@ export function authRoutes(
     '/api/v1/auth/sms/send',
     authRateLimit ? { onRequest: authRateLimit } : {},
     async (req, reply) => {
-      const parsed = sendSmsSchema.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
-      }
-      const { phone, channel } = parsed.data;
+      const { phone, channel } = assertSchema(sendSmsSchema, req.body ?? {});
       repos.sms.deleteExpiredByPhone(phone);
       const recent = repos.sms.latestUnusedInWindow(phone);
       if (recent) {
-        return reply.send(fail(429, '验证码发送频繁，请 60 秒后再试'));
+        throw new ApiError(429, '验证码发送频繁，请 60 秒后再试');
       }
       // 重发窗口已过：作废历史未用验证码，避免同一手机号同时存在多个有效码
       repos.sms.invalidateAllUnused(phone);
@@ -70,11 +64,7 @@ export function authRoutes(
     '/api/v1/auth/phone',
     authRateLimit ? { onRequest: authRateLimit } : {},
     async (req, reply) => {
-      const parsed = phoneLoginSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
-      }
-      const { phone, code, nickname, mergeGuestToken } = parsed.data;
+      const { phone, code, nickname, mergeGuestToken } = assertSchema(phoneLoginSchema, req.body);
       const pending = repos.sms.findLatestLogin(phone);
       if (!pending || pending.code !== code) {
         if (pending) {
@@ -84,10 +74,10 @@ export function authRoutes(
             repos.sms.markUsed(pending.id);
           }
         }
-        return reply.send(fail(403, '验证码错误或已过期'));
+        throw new ApiError(403, '验证码错误或已过期');
       }
       if (Number(pending.fail_count ?? 0) >= MAX_CODE_ATTEMPTS) {
-        return reply.send(fail(403, '尝试次数过多，请重新获取验证码'));
+        throw new ApiError(403, '尝试次数过多，请重新获取验证码');
       }
       repos.sms.markUsed(pending.id);
 
@@ -101,7 +91,7 @@ export function authRoutes(
         user = repos.users.findById(userId);
       }
       if (!user) {
-        return reply.send(fail(500, '用户创建失败'));
+        throw new ApiError(500, '用户创建失败');
       }
       // 游客数据迁移：登录成功后，将游客 token 对应账号的档案/测算记录/订单转入本账号。
       // 事务保证一致性；guest 与手机号同源时跳过；无数据或已合并时静默返回 0。
@@ -146,14 +136,7 @@ export function authRoutes(
 
   /** 更新个人资料（当前支持昵称修改，字段级校验，nickname 1-30） */
   app.patch('/api/v1/auth/profile', { preHandler: app.authenticate }, async (req, reply) => {
-    const body = (req.body ?? {}) as { nickname?: string };
-    const nickname = body.nickname === undefined ? undefined : String(body.nickname).trim();
-    if (nickname !== undefined && (nickname.length < 1 || nickname.length > 30)) {
-      return reply.send(fail(400, '昵称长度需为 1-30 个字符'));
-    }
-    if (nickname === undefined) {
-      return reply.send(fail(400, '没有可更新的字段'));
-    }
+    const { nickname } = assertSchema(profileUpdateSchema, req.body ?? {}, '昵称长度需为 1-30 个字符');
     repos.users.updateNickname(req.userId, nickname);
     const user = repos.users.findById(req.userId);
     return reply.send(ok(user, '资料已更新'));

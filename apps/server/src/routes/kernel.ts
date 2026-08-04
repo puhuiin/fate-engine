@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { fail, ok } from '../lib/util.js';
+import { ok } from '../lib/util.js';
+import { assertSchema } from '../lib/http.js';
 import type { Repos } from '../db/repo/index.js';
 import { kernelLogSchema, kernelQuerySchema } from '../schema.js';
 
@@ -10,11 +11,7 @@ import { kernelLogSchema, kernelQuerySchema } from '../schema.js';
  */
 export function kernelRoutes(app: FastifyInstance, repos: Repos): void {
   app.post('/api/v1/kernel/log', { preHandler: app.authenticate }, async (req, reply) => {
-    const parsed = kernelLogSchema.safeParse(req.body ?? {});
-    if (!parsed.success) {
-      return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
-    }
-    const { version, ruleName, ruleDetail, note } = parsed.data;
+    const { version, ruleName, ruleDetail, note } = assertSchema(kernelLogSchema, req.body ?? {});
     const id = repos.kernel.insert({ version, ruleName, ruleDetail, note });
     const row = repos.kernel.findById(id);
     return reply.send(ok(row, '内核规则迭代已记录'));

@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { fail, ok, parseId } from '../lib/util.js';
+import { ok } from '../lib/util.js';
+import { ApiError } from '../lib/errors.js';
+import { assertSchema, requireIdParam } from '../lib/http.js';
 import { calculateSchema } from '../schema.js';
 import type { Repos } from '../db/repo/index.js';
 import { runL1 } from '../modules/l1/l1.js';
@@ -31,14 +33,10 @@ interface ArchiveRow {
 export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   /** 触发测算：阶段1 仅执行 L1 时空校正，返回九层报告结构 */
   app.post('/api/v1/calculate', { preHandler: app.authenticate }, async (req, reply) => {
-    const parsed = calculateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
-    }
-    const { archiveId, calcType } = parsed.data;
+    const { archiveId, calcType } = assertSchema(calculateSchema, req.body);
     const archive = repos.archives.findByUserIdAndId<ArchiveRow>(archiveId, req.userId);
     if (!archive) {
-      return reply.send(fail(404, '档案不存在或无权访问'));
+      throw new ApiError(404, '档案不存在或无权访问');
     }
 
     let l1: ReturnType<typeof runL1>;
@@ -75,9 +73,7 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
       l8 = runL8(l4, l5, l2.bazi);
       l9 = runL9(l2.bazi, l4, l5, l7);
     } catch (e) {
-      return reply.send(
-        fail(400, e instanceof Error ? e.message : '出生信息不合法，请重新编辑档案'),
-      );
+      throw new ApiError(400, e instanceof Error ? e.message : '出生信息不合法，请重新编辑档案');
     }
 
     const report = buildNineLayerReport(l1, l2, l3, l4, l5, l6, l7, l8, l9);
@@ -110,17 +106,14 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   });
 
   /** 读取测算记录（仅本人） */
-  app.get('/api/v1/records/:id', { preHandler: app.authenticate }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
+  app.get('/api/v1/records/:id', { preHandler: app.authenticate }, async (req) => {
+    const id = requireIdParam(req, 'id');
     const record = repos.records.findById<Record<string, unknown> & { raw_json: string | null }>(
       id,
       req.userId,
     );
     if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
+      throw new ApiError(404, '记录不存在或无权访问');
     }
     const raw = record.raw_json;
     let parsed: unknown = null;
@@ -148,13 +141,10 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
 
   /** 某记录的已知风险项清单（仅本人）：L5/L6 属付费层，未解锁仅返回 locked 标记 */
   app.get('/api/v1/records/:id/risks', { preHandler: app.authenticate }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
+    const id = requireIdParam(req, 'id');
     const record = repos.records.findMetaById(id, req.userId);
     if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
+      throw new ApiError(404, '记录不存在或无权访问');
     }
     if (record.paid_status !== 1) {
       return reply.send(
@@ -189,13 +179,10 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
 
   /** 删除测算记录（仅本人）：级联清理改运方案、风险项与订单 */
   app.delete('/api/v1/records/:id', { preHandler: app.authenticate }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
+    const id = requireIdParam(req, 'id');
     const record = repos.records.findMetaById(id, req.userId);
     if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
+      throw new ApiError(404, '记录不存在或无权访问');
     }
     repos.records.deleteCascade(id);
     return reply.send(ok({ removed: true }, '记录已删除'));

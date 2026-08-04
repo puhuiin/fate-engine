@@ -36,6 +36,13 @@ export const guestSchema = z.object({
   nickname: z.string().trim().min(1).max(30).optional(),
 });
 
+/** 个人资料编辑（当前支持昵称修改） */
+export const profileUpdateSchema = z
+  .object({
+    nickname: z.string().trim().min(1).max(30),
+  })
+  .refine((d) => d.nickname !== undefined, '没有可更新的字段');
+
 export const archiveCreateSchema = z.object({
   gender: z.enum(['male', 'female', 'other']).nullable().optional(),
   solarDate: z.string().refine(isRealDate, '日期不存在，应为有效公历日期（YYYY-MM-DD）'),
