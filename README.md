@@ -43,7 +43,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 6 组确定性回归脚本（44 + 8 + 15 + 47 + 130 + 5 = 249 断言） |
+| 校验 | 6 组确定性回归脚本（44 + 8 + 15 + 47 + 132 + 5 = 251 断言）；前端 6 文件 29 用例（含 React 组件测试） |
 
 ---
 
@@ -90,17 +90,17 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（249 断言）
+# 全量回归（251 断言）
 npm run verify -w @fate/server
 
 # 分块验证
 npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时边界（8 用例）
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆（15 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（47 断言，含深度模式差异）
-npm run verify:api -w @fate/server  # 接口层（130 断言，内存 SQLite + inject，含取消订单/过期清理/模式筛选）
+npm run verify:api -w @fate/server  # 接口层（132 断言，内存 SQLite + inject，含取消订单/过期清理/模式筛选）
 npm run verify:migrate -w @fate/server  # 迁移机制（5 断言：新库全量/幂等重跑/旧库补应用）
 
-# 前端单元测试（纯函数层：白话导读 / 精度映射）
+# 前端测试（纯函数 + React 组件：表格渲染、错误边界、骨架屏）
 npm run test -w @fate/web
 ```
 
@@ -197,6 +197,8 @@ fate-engine/
 │       └── src/
 │           ├── api/          # client.ts（15s 超时、401 全局登出事件、cancelOrder）
 │           ├── components/   # Skeleton 骨架屏 / ErrorBoundary / 登录面板 / 表格
+│           ├── test/         # vitest setup（jest-dom 断言 + DOM 自动清理）
+│           ├── __tests__/    # 纯函数 + React 组件测试（RTL + jsdom）
 │           ├── layers.ts     # 九层骨架/提示文案
 │           └── pages/        # Input / Loading / Report / History（订单取消、骨架加载态）
 │               └── report/   # 九层组件与导出逻辑（layers.tsx）

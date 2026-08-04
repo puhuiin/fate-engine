@@ -998,11 +998,18 @@ const filterBadType = await call('GET', '/api/v1/records?calcType=quantum-extra'
 });
 check('非法 calcType 筛选 400', filterBadType.status === 400 && filterBadType.json.code === 400);
 
+// 新建一条未解锁记录，用于订单过期批量清理测试
+const zombieCalc = await call('POST', '/api/v1/calculate', {
+  token: tokenA,
+  body: { archiveId: cancelArchive, calcType: 'quantum' },
+});
+const zombieRecord = zombieCalc.json.data?.recordId as number;
 const zombie = await call('POST', '/api/v1/orders', {
   token: tokenA,
-  body: { recordId: quantumRecord },
+  body: { recordId: zombieRecord },
 });
 const zombieId = zombie.json.data?.order?.id as number;
+check('创建待清理订单成功', zombie.status === 200 && Number.isInteger(zombieId));
 db.prepare(`UPDATE order_pay SET created_at = datetime('now', '-2 hours') WHERE id = ?`).run(
   zombieId,
 );
