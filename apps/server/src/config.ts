@@ -21,6 +21,10 @@ const envSchema = z.object({
   DATA_CLEANUP_MIN: z.coerce.number().int().min(0).max(1440).optional(),
   /** 未绑定手机号的游客账号保留天数，超期级联清理 */
   FATE_GUEST_TTL_DAYS: z.coerce.number().int().min(1).max(3650).optional(),
+  /** 内核审计接口管理员令牌（未配置时写/读内核审计接口直接拒绝） */
+  ADMIN_TOKEN: z.string().min(1).max(256).optional(),
+  /** 单手机号每日短信发送上限，防轰炸 */
+  SMS_DAILY_MAX: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -66,6 +70,10 @@ export const config = {
   maxCodeAttempts: 5,
   /** 验证码有效期（毫秒） */
   smsCodeTtlMs: 10 * 60 * 1000,
+  /** 单手机号每日短信发送上限，防轰炸 */
+  smsDailyMax: env.SMS_DAILY_MAX ?? 10,
+  /** 内核审计接口管理员令牌（未配置时写/读内核审计接口直接拒绝） */
+  adminToken: env.ADMIN_TOKEN,
 
   /** SQLite 数据库路径 */
   dbPath: env.DB_PATH || path.resolve(process.cwd(), 'data', 'fate.db'),

@@ -1,4 +1,5 @@
-import type { FastifyRequest } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import { timingSafeEqual } from 'node:crypto';
 import type { ZodTypeAny, infer as ZodInfer, ZodIssue } from 'zod';
 import { ApiError } from './errors.js';
 import { parseId } from './util.js';
@@ -58,4 +59,29 @@ export function requireIdParam(req: FastifyRequest, name: string): number {
     throw new ApiError(400, `参数 ${name} 不合法`);
   }
   return id;
+}
+
+/**
+ * 内核审计等管理接口的管理员校验。
+ * 通过 `x-admin-token` 请求头与配置的 ADMIN_TOKEN 做恒时比较；
+ * 未配置 ADMIN_TOKEN 时接口一律拒绝（403），避免管理接口裸奔。
+ * 校验失败抛 ApiError(403)，由全局错误处理器统一响应。
+ */
+export async function requireAdmin(
+  req: FastifyRequest,
+  _reply: FastifyReply,
+  adminToken?: string,
+): Promise<void> {
+  if (!adminToken) {
+    throw new ApiError(403, '未配置管理员令牌，管理接口不可用');
+  }
+  const provided = String((req.headers['x-admin-token'] as string) ?? '');
+  if (provided.length !== adminToken.length) {
+    throw new ApiError(403, '需要管理员权限');
+  }
+  const a = Buffer.from(provided);
+  const b = Buffer.from(adminToken);
+  if (!timingSafeEqual(a, b)) {
+    throw new ApiError(403, '需要管理员权限');
+  }
 }

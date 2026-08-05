@@ -31,6 +31,9 @@ export function createUserRepo(db: Db) {
     updateNickname(id: number, nickname: string) {
       db.prepare('UPDATE sys_user SET nickname = ? WHERE id = ?').run(nickname, id);
     },
+    deleteById(id: number): void {
+      db.prepare('DELETE FROM sys_user WHERE id = ?').run(id);
+    },
     countByPhone(phone: string): number {
       const row = db.prepare('SELECT COUNT(*) AS n FROM sys_user WHERE phone = ?').get(phone) as {
         n: number;

@@ -12,7 +12,11 @@ import { runDataCleanup } from '../src/jobs/dataCleanup.js';
 import type { FastifyInstance } from 'fastify';
 
 const db = createDb(':memory:');
-const app: FastifyInstance = buildApp(db, { logger: false, rateLimit: false });
+const app: FastifyInstance = buildApp(db, {
+  logger: false,
+  rateLimit: false,
+  adminToken: 'verify-admin-token',
+});
 
 interface Resp {
   status: number;
@@ -26,13 +30,21 @@ interface Resp {
 async function call(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   url: string,
-  opts: { body?: unknown; token?: string; remoteAddress?: string } = {},
+  opts: {
+    body?: unknown;
+    token?: string;
+    remoteAddress?: string;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<Resp> {
   const res = await app.inject({
     method,
     url,
     payload: opts.body,
-    headers: opts.token ? { authorization: `Bearer ${opts.token}` } : {},
+    headers: {
+      ...(opts.headers ?? {}),
+      ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
+    },
     ...(opts.remoteAddress ? { remoteAddress: opts.remoteAddress } : {}),
   });
   return { status: res.statusCode, json: res.json() as Resp['json'] };
@@ -548,6 +560,24 @@ check(
     ),
 );
 
+const afterMergeGuest = await call('GET', '/api/v1/archives', { token: tokenM });
+check(
+  '合并后旧游客账号已删除（token 失效）',
+  afterMergeGuest.status === 200 && (afterMergeGuest.json.data as unknown[]).length === 0,
+);
+
+const smsX = await call('POST', '/api/v1/auth/sms/send', {
+  body: { phone: '13655554444', channel: 'login' },
+});
+const codeX = smsX.json.data?.devCode as string;
+const phX = await call('POST', '/api/v1/auth/phone', {
+  body: { phone: '13655554444', code: codeX, mergeGuestToken: tokenMerged },
+});
+check(
+  'phone 类型 token 不能触发游客合并',
+  phX.status === 200 && Number(phX.json.data?.merged?.records) === 0,
+);
+
 // ---------- 10. 越权防护：B 访问 A 的资源 → 404 ----------
 const crossArc = await call('GET', `/api/v1/archives/${archive1}`, { token: tokenB });
 check('越权读他人档案 404', crossArc.status === 404);
@@ -671,17 +701,28 @@ check(
 );
 
 // ---------- 13. 内核日志 ----------
+const klDenied = await call('POST', '/api/v1/kernel/log', {
+  token: tokenA,
+  body: { version: 'V16', ruleName: 'no-admin', ruleDetail: '' },
+});
+check('内核审计无管理员令牌 403', klDenied.status === 403 && klDenied.json.code === 403);
+
 const kl = await call('POST', '/api/v1/kernel/log', {
   token: tokenA,
+  headers: { 'x-admin-token': 'verify-admin-token' },
   body: { version: 'V16', ruleName: 'verify_api', ruleDetail: '接口层回归校验' },
 });
-check('内核迭代日志写入', kl.status === 200 && kl.json.data?.version === 'V16');
+check('内核迭代日志写入（管理员令牌）', kl.status === 200 && kl.json.data?.version === 'V16');
 
-const klq = await call('GET', '/api/v1/kernel/logs?version=V16', { token: tokenA });
+const klq = await call('GET', '/api/v1/kernel/logs?version=V16', {
+  token: tokenA,
+  headers: { 'x-admin-token': 'verify-admin-token' },
+});
 check('按版本查询内核日志', klq.status === 200 && (klq.json.data as unknown[]).length === 1);
 
 const klOver = await call('POST', '/api/v1/kernel/log', {
   token: tokenA,
+  headers: { 'x-admin-token': 'verify-admin-token' },
   body: { version: 'V16', ruleName: 'x'.repeat(51), ruleDetail: '' },
 });
 check('kernel 超长 ruleName 拒绝 400', klOver.status === 400 && klOver.json.code === 400);

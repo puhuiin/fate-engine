@@ -41,6 +41,11 @@ export interface BuildAppOpts {
    * （'true'/'1' 或数字）；未配置时不信任（直连场景）。
    */
   trustProxy?: boolean | number | string[];
+  /**
+   * 内核审计等管理接口的管理员令牌（ADMIN_TOKEN 覆盖）。
+   * 未配置时管理接口一律拒绝（403）。
+   */
+  adminToken?: string;
 }
 
 /** 请求体上限（JSON API 场景 64KB 足够，防超大 body 资源耗尽） */
@@ -262,7 +267,7 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   calculateRoutes(app, repos);
   orderRoutes(app, repos);
   planRoutes(app, repos);
-  kernelRoutes(app, repos);
+  kernelRoutes(app, repos, { adminToken: opts.adminToken ?? config.adminToken });
   statsRoutes(app, repos);
 
   return app;
