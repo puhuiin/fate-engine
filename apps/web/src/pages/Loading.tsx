@@ -15,8 +15,7 @@ export default function Loading() {
   };
 
   useEffect(() => {
-    if (!state || started.current) return;
-    started.current = true;
+    if (!state) return;
     const total = LAYER_SKELETON.length;
     const interval = setInterval(() => {
       setDoneCount((n) => {
@@ -27,7 +26,12 @@ export default function Loading() {
         return n + 1;
       });
     }, 220);
-    return () => clearInterval(interval);
+    // StrictMode 下 effect 会 setup→cleanup→setup 双跑：
+    // cleanup 必须重置 started，否则第二次 setup 因 started=true 直接跳过，动画永不启动
+    return () => {
+      clearInterval(interval);
+      started.current = false;
+    };
   }, [navigate, state]);
 
   if (!state) {

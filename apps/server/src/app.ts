@@ -214,7 +214,7 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     return payload;
   });
 
-  app.get('/api/health', async () => {
+  app.get('/api/health', async (_req, reply) => {
     let dbOk = true;
     let dbSizeBytes = 0;
     try {
@@ -229,7 +229,7 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       dbOk = false;
     }
     const mem = process.memoryUsage();
-    return {
+    const body = {
       ok: dbOk,
       name: 'fate-engine',
       version: '0.1.0',
@@ -241,6 +241,10 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       dbSizeMB: Math.round(dbSizeBytes / 1024 / 1024),
       time: new Date().toISOString(),
     };
+    if (!dbOk) {
+      reply.code(503);
+    }
+    return body;
   });
 
   /** OpenAPI 契约：机器可读 API 文档，端点与 routes/ 同步登记 */

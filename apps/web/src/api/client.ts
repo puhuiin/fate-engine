@@ -11,6 +11,14 @@ const TOKEN_KEY = 'fate_token';
 /** 登录态变化事件：登录成功或 token 失效（401）时触发，供全局 UI（如顶部用户信息）同步刷新 */
 export const AUTH_CHANGED_EVENT = 'fate:auth-changed';
 
+/** 全局提示事件：非阻塞 toast 通知（登录过期等全局性消息） */
+export const TOAST_EVENT = 'fate:toast';
+
+/** 触发全局 toast（App 层监听渲染，避免各页面手写 alert 打断操作） */
+export function notifyToast(msg: string): void {
+  window.dispatchEvent(new CustomEvent(TOAST_EVENT, { detail: msg }));
+}
+
 /** 请求超时（毫秒），防止网络挂起导致界面无限 loading */
 const REQUEST_TIMEOUT = 15000;
 
@@ -28,6 +36,13 @@ async function fetchWithRetry(
     !init.method || init.method === 'GET' || init.method === 'HEAD' ? RETRY_MAX + 1 : 1;
   while (true) {
     const ctrl = new AbortController();
+    // 支持外部取消入口（组件切页/卸载时 abort），外部取消不触发重试
+    const external = init.signal;
+    const onAbort = () => ctrl.abort();
+    if (external) {
+      if (external.aborted) ctrl.abort();
+      else external.addEventListener('abort', onAbort);
+    }
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const res = await fetch(path, { ...init, signal: ctrl.signal });
@@ -35,9 +50,12 @@ async function fetchWithRetry(
       return res;
     } catch (err) {
       clearTimeout(timer);
+      if (external?.aborted) throw err;
       attempt += 1;
       if (attempt >= maxAttempts) throw err;
       await new Promise((r) => setTimeout(r, RETRY_BASE_MS * 2 ** (attempt - 1)));
+    } finally {
+      external?.removeEventListener('abort', onAbort);
     }
   }
 }
@@ -86,6 +104,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<ApiResp<
   }
   if (body.code === 401) {
     clearToken();
+    notifyToast('登录已过期，请重新登录');
     throw new Error('登录已过期，请重新登录');
   }
   return body;
@@ -419,8 +438,11 @@ export function calculate(
   });
 }
 
-export function getRecord(id: number): Promise<ApiResp<RecordDetail>> {
-  return request(`/api/v1/records/${id}`);
+export function getRecord(
+  id: number,
+  opts?: { signal?: AbortSignal },
+): Promise<ApiResp<RecordDetail>> {
+  return request(`/api/v1/records/${id}`, opts ?? {});
 }
 
 export interface RecordsPage {
@@ -430,13 +452,8 @@ export interface RecordsPage {
   pageSize: number;
 }
 
-export function listRecords(
-  page?: number,
-  pageSize?: number,
-): Promise<ApiResp<RecordListItem[] | RecordsPage>> {
-  const qs =
-    page !== undefined && pageSize !== undefined ? `?page=${page}&pageSize=${pageSize}` : '';
-  return request(`/api/v1/records${qs}`);
+export function listRecords(page = 1, pageSize = 10): Promise<ApiResp<RecordsPage>> {
+  return request(`/api/v1/records?page=${page}&pageSize=${pageSize}`);
 }
 
 export interface OrderInfo {
@@ -501,8 +518,11 @@ export interface PlansResp {
   lockedLayers?: number[];
 }
 
-export function getPlans(recordId: number): Promise<ApiResp<PlansResp>> {
-  return request(`/api/v1/records/${recordId}/plans`);
+export function getPlans(
+  recordId: number,
+  opts?: { signal?: AbortSignal },
+): Promise<ApiResp<PlansResp>> {
+  return request(`/api/v1/records/${recordId}/plans`, opts ?? {});
 }
 
 export interface RiskItem {
@@ -516,8 +536,9 @@ export interface RiskItem {
 
 export function getRisks(
   recordId: number,
+  opts?: { signal?: AbortSignal },
 ): Promise<ApiResp<{ risks: RiskItem[]; total: number; locked?: boolean }>> {
-  return request(`/api/v1/records/${recordId}/risks`);
+  return request(`/api/v1/records/${recordId}/risks`, opts ?? {});
 }
 
 export function patchPlan(

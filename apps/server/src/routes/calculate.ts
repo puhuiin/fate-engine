@@ -167,15 +167,13 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
     return ok({ risks: rows, total: rows.length, locked: false });
   });
 
-  /** 测算历史列表（可选分页 page/pageSize 与深度模式 calcType 筛选） */
+  /** 测算历史列表（可选分页 page/pageSize 与深度模式 calcType 筛选）。
+   *  统一返回分页结构 { list, total, page, pageSize, calcType }，
+   *  不再按参数有无切换数组/对象两种形状，客户端契约单一化。 */
   app.get('/api/v1/records', { preHandler: app.authenticate }, async (req) => {
     const { page, pageSize, calcType } = assertSchema(recordsQuerySchema, req.query ?? {});
     const currentPage = page ?? 1;
     const currentSize = pageSize ?? 10;
-    if (page === undefined && pageSize === undefined && calcType === undefined) {
-      const rows = repos.records.listAllByUser(req.userId);
-      return ok(rows);
-    }
     const { rows, total } = repos.records.listByUser(
       req.userId,
       currentPage,

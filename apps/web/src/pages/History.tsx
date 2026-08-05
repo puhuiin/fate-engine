@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   calculate,
@@ -38,8 +38,13 @@ export default function History() {
   const [loadMoreError, setLoadMoreError] = useState('');
   const [stats, setStats] = useState<StatsOverview | null>(null);
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  // 请求序号：仅接受最新一次 load 的响应，避免「加载更多」与「刷新/删除」并发互相覆盖
+  const loadSeq = useRef(0);
+  // 测算防重：同一时间只允许一次测算请求
+  const calcRunning = useRef(false);
 
   const load = async (targetPage: number, isLoadMore = false) => {
+    const seq = ++loadSeq.current;
     setLoadError('');
     setLoadMoreError('');
     const [rec, arc, user, st, od] = await Promise.allSettled([
@@ -49,8 +54,9 @@ export default function History() {
       getStatsOverview(),
       listOrders(),
     ]);
+    if (seq !== loadSeq.current) return;
     if (rec.status === 'fulfilled' && rec.value.code === 200) {
-      const d = (rec.value.data ?? {}) as { list?: RecordRow[]; total?: number };
+      const d = rec.value.data;
       setRecords((prev) => (targetPage === 1 ? (d.list ?? []) : [...prev, ...(d.list ?? [])]));
       setTotal(d.total ?? 0);
       setPage(targetPage);
@@ -88,6 +94,8 @@ export default function History() {
   };
 
   const runCalc = async (archiveId: number) => {
+    if (calcRunning.current) return;
+    calcRunning.current = true;
     try {
       await ensureGuest();
       const calc = await calculate(archiveId, 'standard');
@@ -98,6 +106,8 @@ export default function History() {
       navigate('/loading', { state: { recordId: calc.data.recordId } });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : '测算失败，请重试');
+    } finally {
+      calcRunning.current = false;
     }
   };
 

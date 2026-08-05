@@ -21,6 +21,13 @@ export function createRecordRepo(db: Db) {
         .prepare('SELECT id, paid_status FROM calculate_record WHERE id = ? AND user_id = ?')
         .get(id, userId) as { id: number; paid_status: number } | undefined;
     },
+    /** 读取记录的解锁状态（不要求属主校验，调用方负责鉴权；用于支付收尾判断） */
+    getPaidStatus(recordId: number): number {
+      const row = db
+        .prepare('SELECT paid_status FROM calculate_record WHERE id = ?')
+        .get(recordId) as { paid_status: number } | undefined;
+      return Number(row?.paid_status ?? 0);
+    },
     countByUser(userId: number): number {
       const row = db
         .prepare('SELECT COUNT(*) AS n FROM calculate_record WHERE user_id = ?')
@@ -40,17 +47,6 @@ export function createRecordRepo(db: Db) {
         .all(...params, pageSize, (page - 1) * pageSize) as Record<string, unknown>[];
       const total = db.prepare(`SELECT COUNT(*) AS n ${base}`).get(...params) as { n: number };
       return { rows, total: Number(total.n) };
-    },
-    listAllByUser(userId: number, calcType?: string) {
-      const where = `WHERE r.user_id = ?${calcType ? ' AND r.calc_type = ?' : ''}`;
-      const base =
-        'FROM calculate_record r JOIN user_birth_archive a ON r.archive_id = a.id AND a.user_id = r.user_id' +
-        ` ${where}`;
-      const cols = `r.id, r.archive_id, r.calc_type, r.status, r.paid_status, r.created_at,
-                    a.solar_date, a.solar_time, a.city_name`;
-      return db
-        .prepare(`SELECT ${cols} ${base} ORDER BY r.created_at DESC`)
-        .all(...(calcType ? [userId, calcType] : [userId])) as Record<string, unknown>[];
     },
     markPaid(recordId: number): void {
       db.prepare('UPDATE calculate_record SET paid_status = 1 WHERE id = ?').run(recordId);

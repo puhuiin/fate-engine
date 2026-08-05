@@ -555,9 +555,9 @@ const listMergedRec = await call('GET', '/api/v1/records', { token: tokenMerged 
 check(
   '合并后手机号账号可见游客记录',
   listMergedRec.status === 200 &&
-    (listMergedRec.json.data as Array<{ archive_id: number }>).some(
+    (listMergedRec.json.data as { list?: Array<{ archive_id: number }> }).list?.some(
       (r) => r.archive_id === archiveM,
-    ),
+    ) === true,
 );
 
 const afterMergeGuest = await call('GET', '/api/v1/archives', { token: tokenM });
@@ -641,10 +641,10 @@ check(
 );
 const pageNoArg = await call('GET', `/api/v1/records`, { token: tokenA });
 check(
-  '不分页时保持数组语义兼容',
+  '不分页时统一返回分页结构（list 语义兼容）',
   pageNoArg.status === 200 &&
-    Array.isArray(pageNoArg.json.data) &&
-    (pageNoArg.json.data as unknown[]).length >= 2,
+    !Array.isArray(pageNoArg.json.data) &&
+    (pageNoArg.json.data as { list?: unknown[] }).list?.length >= 2,
 );
 const pageClamp = await call('GET', '/api/v1/records?page=999&pageSize=9999', { token: tokenA });
 check(
@@ -665,7 +665,7 @@ check(
   'pageSize 小数不 500，floor 为整数',
   pageFloat.status === 200 && pageFloat.json.data?.pageSize === 2,
 );
-const listRec = (pageNoArg.json.data as Array<Record<string, unknown>>)[0];
+const listRec = ((pageNoArg.json.data as { list?: Array<Record<string, unknown>> }).list ?? [])[0];
 check(
   '记录列表不含内部 user_id/raw_json 字段',
   listRec?.user_id === undefined && listRec?.raw_json === undefined,
