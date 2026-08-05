@@ -8,6 +8,7 @@ import { buildApp } from '../src/app.js';
 import { decompress } from '../src/lib/compress.js';
 import { createRepos } from '../src/db/repo/index.js';
 import { startOrderExpiryTask } from '../src/jobs/expireOrders.js';
+import { runDataCleanup } from '../src/jobs/dataCleanup.js';
 import type { FastifyInstance } from 'fastify';
 
 const db = createDb(':memory:');
@@ -833,10 +834,7 @@ const gzHit = await gzApp.inject({
   url: `/api/v1/records/${gzRecId}`,
   headers: { authorization: `Bearer ${gzToken}`, 'accept-encoding': 'gzip' },
 });
-check(
-  'gzip：大响应压缩返回 content-encoding: gzip',
-  gzHit.headers['content-encoding'] === 'gzip',
-);
+check('gzip：大响应压缩返回 content-encoding: gzip', gzHit.headers['content-encoding'] === 'gzip');
 const gzJson = JSON.parse(await decompress(Buffer.from(gzHit.rawPayload))) as { code: number };
 check('gzip：解压后 JSON 完整可解析', gzJson.code === 200);
 const gzSmall = await gzApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
@@ -1083,6 +1081,68 @@ const zombieAfter = db
   .prepare('SELECT entitlement_status FROM order_pay WHERE id = ?')
   .get(zombieId) as { entitlement_status: string };
 check('订单过期批量清理任务作废旧单', zombieAfter.entitlement_status === 'expired');
+
+// ---------- 16. OpenAPI 契约 + 数据生命周期治理 ----------
+const oaRes = await app.inject({ method: 'GET', url: '/api/openapi.json' });
+const oaDoc = oaRes.json() as {
+  openapi?: string;
+  paths?: Record<string, unknown>;
+  components?: { securitySchemes?: unknown };
+  'x-rate-limit'?: { global?: { max?: number } };
+};
+check(
+  'OpenAPI 契约返回 3.0 且含核心端点与鉴权方案',
+  oaRes.statusCode === 200 &&
+    oaDoc.openapi === '3.0.3' &&
+    typeof oaDoc.paths?.['/api/v1/orders'] === 'object' &&
+    typeof oaDoc.paths?.['/api/v1/orders/{id}/cancel'] === 'object' &&
+    typeof oaDoc.paths?.['/api/v1/auth/guest'] === 'object' &&
+    oaDoc.components?.securitySchemes !== undefined &&
+    oaDoc['x-rate-limit']?.global?.max === 300,
+);
+
+// 数据治理：独立内存库构造孤儿记录/过期验证码/超期游客，验证 runDataCleanup 全清
+const clDb = createDb(':memory:');
+const clRepos = createRepos(clDb);
+const old = '2000-01-01 00:00:00';
+clRepos.users.insertGuest('保留游客');
+const staleId = clDb
+  .prepare('INSERT INTO sys_user (nickname, register_channel, created_at) VALUES (?, ?, ?)')
+  .run('久客', 'guest', old).lastInsertRowid;
+const staleArchId = clDb
+  .prepare('INSERT INTO user_birth_archive (user_id, solar_date, created_at) VALUES (?, ?, ?)')
+  .run(Number(staleId), '2000-01-01', old).lastInsertRowid;
+clDb
+  .prepare(
+    'INSERT INTO calculate_record (archive_id, user_id, calc_type, status, created_at) VALUES (?, ?, ?, ?, ?)',
+  )
+  .run(Number(staleArchId), Number(staleId), 'standard', 'pending', old);
+clDb
+  .prepare(
+    "INSERT INTO sms_code (phone, code, expires_at) VALUES ('13800000000', '0000', '2000-01-01 00:00:00')",
+  )
+  .run();
+clDb.pragma('foreign_keys = OFF');
+clDb
+  .prepare(
+    'INSERT INTO calculate_record (archive_id, user_id, calc_type, status) VALUES (99999, 99999, ?, ?)',
+  )
+  .run('standard', 'pending');
+clDb.pragma('foreign_keys = ON');
+const clStats = runDataCleanup(clRepos);
+check(
+  '数据治理清掉孤儿记录/过期验证码/超期游客',
+  clStats.orphanRecords === 1 &&
+    clStats.expiredSms === 1 &&
+    clStats.staleGuests === 1 &&
+    (clDb.prepare('SELECT COUNT(*) AS n FROM calculate_record').get() as { n: number }).n === 0 &&
+    (
+      clDb
+        .prepare('SELECT COUNT(*) AS n FROM sys_user WHERE register_channel = ?')
+        .get('guest') as { n: number }
+    ).n === 1,
+);
+clDb.close();
 
 db.close();
 

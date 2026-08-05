@@ -169,6 +169,7 @@ npm run test -w @fate/web
 |------|------|------|
 | GET | `/api/health` | 健康检查（`layers` 返回各测算层版本数组） |
 | GET | `/api/v1/locations/search?q=` | 城市经纬度搜索（query 截断 ≤20） |
+| GET | `/api/openapi.json` | OpenAPI 3.0 契约（端点清单 / 鉴权方案 / 限流语义） |
 
 ---
 
@@ -180,12 +181,12 @@ fate-engine/
 │   ├── server/
 │   │   ├── scripts/          # verify_all/l1/l2/l3/api 回归脚本
 │   │   └── src/
-│   │       ├── index.ts      # 入口（生产 FATE_SECRET 强校验；启动/停机挂载订单过期清理任务）
+│   │       ├── index.ts      # 入口（生产 FATE_SECRET 强校验；启动/停机挂载订单过期与数据清理任务）
 │   │       ├── app.ts        # Fastify 组装 + 统一错误处理 + 健康检查
 │   │       ├── config.ts     # zod envSchema 强校验环境变量（非法值启动即拒绝）
 │   │       ├── schema.ts     # zod 输入校验
 │   │       ├── routes/       # auth/archives/calculate/orders/plans/kernel/stats
-│   │       ├── jobs/         # expireOrders.ts 订单过期批量清理定时任务（60s + timer.unref）
+│   │       ├── jobs/         # expireOrders.ts 订单过期清理 + dataCleanup.ts 数据生命周期治理
 │   │       ├── modules/
 │   │       │   ├── l1/       # 时空校正（dst 夏令时 / location / time / rating）
 │   │       │   ├── l2/       # 八字双流派
@@ -224,7 +225,8 @@ fate-engine/
 - **事务一致性**：测算写入（记录 + 计划 + 风险）由外层单一事务包裹，禁止嵌套事务
 - **数据访问分层**：SQL 读写全部收敛到 `db/repo/` Repository 层，路由层只做鉴权、校验与编排；模块层（L1–L9）保持纯计算，落库行映射（`toPlanRows` / `toRiskRows`）由模块层导出
 - **业务错误收敛**：路由统一 `throw ApiError`（`lib/errors.ts`），由全局错误处理器转 `ApiResp`；`lib/http.ts` 提供 `assertSchema` / `requireIdParam` 消除样板
-- **后台任务**：订单过期清理由 `src/jobs/expireOrders.ts` 承担（启动先清一轮 + 60s 定时，`timer.unref` 不阻塞进程退出，优雅停机时清除）
+- **后台任务**：订单过期清理由 `src/jobs/expireOrders.ts` 承担（启动先清一轮 + 60s 定时，`timer.unref` 不阻塞进程退出，优雅停机时清除）；数据生命周期治理由 `src/jobs/dataCleanup.ts` 承担（孤儿记录/过期验证码/超期游客级联清理，周期 `DATA_CLEANUP_MIN` 默认 60 分钟、`FATE_GUEST_TTL_DAYS` 默认 30 天，设 `DATA_CLEANUP_MIN=0` 仅启动清理一次）
+- **API 契约化**：`GET /api/openapi.json` 输出 OpenAPI 3.0 契约（端点/鉴权方案/限流语义），端点与 routes/ 同步登记
 - **Schema 演进**：`db/migrations.ts` 提供版本化迁移（`schema_migrations` 版本表 + 有序幂等迁移），启动自动应用未执行迁移；升级旧库安全可追溯，`npm run db:migrate` 可查看迁移状态
 - **可观测性**：`X-Request-Id` 全链路回显（UUID），访问日志与错误日志带 requestId 与路径；5xx 记录完整堆栈、4xx 记录告警，客户端仅收到收敛文案
 - **缓存策略**：鉴权/动态数据接口统一 `Cache-Control: no-store`，防止敏感数据进入代理缓存

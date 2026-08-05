@@ -2,6 +2,7 @@ import { createDb } from './db/client.js';
 import { buildApp } from './app.js';
 import { createRepos } from './db/repo/index.js';
 import { startOrderExpiryTask } from './jobs/expireOrders.js';
+import { startDataCleanupTask } from './jobs/dataCleanup.js';
 import { config } from './config.js';
 
 const PORT = config.port;
@@ -24,6 +25,8 @@ const app = buildApp(db);
 
 /** 后台定时任务：待支付订单过期清理（不阻塞进程退出） */
 const stopOrderExpiry = startOrderExpiryTask(createRepos(db));
+/** 后台定时任务：数据生命周期治理（孤儿记录/过期验证码/超期游客，周期可配置） */
+const stopDataCleanup = startDataCleanupTask(createRepos(db));
 
 try {
   await app.listen({ port: PORT, host: HOST });
@@ -43,6 +46,7 @@ async function shutdown(signal: string): Promise<void> {
   force.unref();
   try {
     stopOrderExpiry();
+    stopDataCleanup();
     await app.close();
   } catch (err) {
     app.log.error(err);
