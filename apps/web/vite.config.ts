@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -45,5 +46,8 @@ export default defineConfig({
       },
     },
     allowedHosts: ['.monkeycode-ai.online'],
+  },
+  test: {
+    setupFiles: ['./src/test/setup.ts'],
   },
 });

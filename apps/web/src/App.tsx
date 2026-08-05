@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { NavLink, Route, Routes, Link } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AUTH_CHANGED_EVENT, getMe } from './api/client';

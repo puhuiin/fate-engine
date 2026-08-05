@@ -1,26 +1,18 @@
 import type { FastifyInstance } from 'fastify';
-import { fail, ok, parseId } from '../lib/util.js';
-import type { Db } from '../db/client.js';
-import { requireAuth } from './auth.js';
+import { ok } from '../lib/util.js';
+import { ApiError } from '../lib/errors.js';
+import { assertSchema, requireIdParam } from '../lib/http.js';
+import type { Repos } from '../db/repo/index.js';
 import { lockedLayers } from '../report.js';
+import { planPatchSchema } from '../schema.js';
 
-interface PlanRow {
-  id: number;
-  record_id: number;
-}
-
-export function planRoutes(app: FastifyInstance, db: Db): void {
+export function planRoutes(app: FastifyInstance, repos: Repos): void {
   /** 某测算记录的全部改运计划（含打卡状态）。L8 属付费层，未解锁仅返回 locked 标记 */
-  app.get('/api/v1/records/:id/plans', { preHandler: requireAuth }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
-    const record = db
-      .prepare('SELECT id, paid_status FROM calculate_record WHERE id = ? AND user_id = ?')
-      .get(id, req.userId) as { id: number; paid_status: number } | undefined;
+  app.get('/api/v1/records/:id/plans', { preHandler: app.authenticate }, async (req, reply) => {
+    const id = requireIdParam(req, 'id');
+    const record = repos.records.findMetaById(id, req.userId);
     if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
+      throw new ApiError(404, '记录不存在或无权访问');
     }
     if (record.paid_status !== 1) {
       return reply.send(
@@ -30,57 +22,30 @@ export function planRoutes(app: FastifyInstance, db: Db): void {
         ),
       );
     }
-    const rows = db
-      .prepare(
-        `SELECT * FROM luck_plan WHERE record_id = ?
-         ORDER BY level ASC, id ASC`,
-      )
-      .all(id);
+    const rows = repos.plans.listByRecord(id);
     const done = rows.filter((r) => (r as { status: string }).status === 'done').length;
     return ok({ plans: rows, doneCount: done, total: rows.length, locked: false });
   });
 
   /** 打卡：标记完成 / 取消完成 / 更新备注（需已解锁） */
-  app.patch('/api/v1/plans/:id', { preHandler: requireAuth }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
-    const body = (req.body ?? {}) as { status?: string; note?: string };
-    const plan = db
-      .prepare(
-        `SELECT p.*, r.paid_status FROM luck_plan p
-         JOIN calculate_record r ON p.record_id = r.id
-         WHERE p.id = ? AND r.user_id = ?`,
-      )
-      .get(id, req.userId) as (PlanRow & { paid_status: number }) | undefined;
+  app.patch('/api/v1/plans/:id', { preHandler: app.authenticate }, async (req) => {
+    const id = requireIdParam(req, 'id');
+    const { status, note } = assertSchema(planPatchSchema, req.body ?? {}, '没有可更新的字段');
+    const plan = repos.plans.findWithRecordById(id, req.userId);
     if (!plan) {
-      return reply.send(fail(404, '计划不存在或无权访问'));
+      throw new ApiError(404, '计划不存在或无权访问');
     }
     if (plan.paid_status !== 1) {
-      return reply.send(fail(403, '请先解锁深度报告再执行改运打卡'));
+      throw new ApiError(403, '请先解锁深度报告再执行改运打卡');
     }
-
-    const note = String(body.note ?? '').trim();
-    if (body.note !== undefined && note.length > 200) {
-      return reply.send(fail(400, '备注长度 ≤200'));
-    }
-    const status = body.status === 'done' ? 'done' : body.status === 'pending' ? 'pending' : null;
     if (status) {
-      db.prepare(
-        `UPDATE luck_plan SET status = ?,
-           finished_at = CASE WHEN ? = 'done' THEN datetime('now') ELSE NULL END
-         WHERE id = ?`,
-      ).run(status, status, id);
+      repos.plans.updateStatus(id, status);
     }
-    if (body.note !== undefined && note) {
-      db.prepare('UPDATE luck_plan SET content = content || char(10) || ? WHERE id = ?').run(
-        note,
-        id,
-      );
+    if (note) {
+      repos.plans.appendNote(id, note);
     }
-    const updated = db.prepare('SELECT * FROM luck_plan WHERE id = ?').get(id);
-    const msg = status ? '打卡状态已更新' : body.note !== undefined ? '备注已更新' : '未更新任何字段';
+    const updated = repos.plans.findById(id);
+    const msg = status ? '打卡状态已更新' : note ? '备注已更新' : '未更新任何字段';
     return ok(updated, msg);
   });
 }

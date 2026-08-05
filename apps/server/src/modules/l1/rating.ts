@@ -48,8 +48,10 @@ export function rateInput(input: RatingInput): RatingResult {
   else grade = 'D';
 
   const suggest: string[] = [];
-  if (input.timePrecision !== 'minute') suggest.push('尽量补充精确到分钟的出生时间（可询问医院出生记录）');
-  if (input.sourceReliability !== 'certificate') suggest.push('确认时间来源，优先采用出生证明/医院记录');
+  if (input.timePrecision !== 'minute')
+    suggest.push('尽量补充精确到分钟的出生时间（可询问医院出生记录）');
+  if (input.sourceReliability !== 'certificate')
+    suggest.push('确认时间来源，优先采用出生证明/医院记录');
   if (!input.hasCity) suggest.push('补充出生城市，用于经纬度与时区校正');
   if (input.nearBoundary) suggest.push('出生时间接近交节/换日边界，建议按前后两版时辰多版本比对');
 

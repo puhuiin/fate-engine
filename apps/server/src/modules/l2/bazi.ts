@@ -6,8 +6,16 @@
 import { Solar } from 'lunar-javascript';
 
 const WUXING_GAN: Record<string, string> = {
-  甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土',
-  己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水',
+  甲: '木',
+  乙: '木',
+  丙: '火',
+  丁: '火',
+  戊: '土',
+  己: '土',
+  庚: '金',
+  辛: '金',
+  壬: '水',
+  癸: '水',
 };
 
 export interface PillarItem {
@@ -51,7 +59,17 @@ export interface BaziResult {
   sectNote: string;
 }
 
-function buildPillar(gan: string, zhi: string, ganZhi: string, wuxing: string, naYin: string, shishenGan: string, shishenZhi: string[], hideGan: string[], dishi: string): PillarItem {
+function buildPillar(
+  gan: string,
+  zhi: string,
+  ganZhi: string,
+  wuxing: string,
+  naYin: string,
+  shishenGan: string,
+  shishenZhi: string[],
+  hideGan: string[],
+  dishi: string,
+): PillarItem {
   return {
     ganzhi: ganZhi,
     gan,
@@ -66,7 +84,11 @@ function buildPillar(gan: string, zhi: string, ganZhi: string, wuxing: string, n
   };
 }
 
-export function buildBazi(clockTime: Date, gender: string): BaziResult {
+export function buildBazi(
+  clockTime: Date,
+  gender: string,
+  currentYear: number = new Date().getUTCFullYear(),
+): BaziResult {
   const solar = Solar.fromYmdHms(
     clockTime.getUTCFullYear(),
     clockTime.getUTCMonth() + 1,
@@ -80,10 +102,50 @@ export function buildBazi(clockTime: Date, gender: string): BaziResult {
   bz.setSect(2);
 
   const pillars = {
-    year: buildPillar(bz.getYearGan(), bz.getYearZhi(), bz.getYear(), bz.getYearWuXing(), bz.getYearNaYin(), bz.getYearShiShenGan(), bz.getYearShiShenZhi(), bz.getYearHideGan(), bz.getYearDiShi()),
-    month: buildPillar(bz.getMonthGan(), bz.getMonthZhi(), bz.getMonth(), bz.getMonthWuXing(), bz.getMonthNaYin(), bz.getMonthShiShenGan(), bz.getMonthShiShenZhi(), bz.getMonthHideGan(), bz.getMonthDiShi()),
-    day: buildPillar(bz.getDayGan(), bz.getDayZhi(), bz.getDay(), bz.getDayWuXing(), bz.getDayNaYin(), bz.getDayShiShenGan(), bz.getDayShiShenZhi(), bz.getDayHideGan(), bz.getDayDiShi()),
-    time: buildPillar(bz.getTimeGan(), bz.getTimeZhi(), bz.getTime(), bz.getTimeWuXing(), bz.getTimeNaYin(), bz.getTimeShiShenGan(), bz.getTimeShiShenZhi(), bz.getTimeHideGan(), bz.getTimeDiShi()),
+    year: buildPillar(
+      bz.getYearGan(),
+      bz.getYearZhi(),
+      bz.getYear(),
+      bz.getYearWuXing(),
+      bz.getYearNaYin(),
+      bz.getYearShiShenGan(),
+      bz.getYearShiShenZhi(),
+      bz.getYearHideGan(),
+      bz.getYearDiShi(),
+    ),
+    month: buildPillar(
+      bz.getMonthGan(),
+      bz.getMonthZhi(),
+      bz.getMonth(),
+      bz.getMonthWuXing(),
+      bz.getMonthNaYin(),
+      bz.getMonthShiShenGan(),
+      bz.getMonthShiShenZhi(),
+      bz.getMonthHideGan(),
+      bz.getMonthDiShi(),
+    ),
+    day: buildPillar(
+      bz.getDayGan(),
+      bz.getDayZhi(),
+      bz.getDay(),
+      bz.getDayWuXing(),
+      bz.getDayNaYin(),
+      bz.getDayShiShenGan(),
+      bz.getDayShiShenZhi(),
+      bz.getDayHideGan(),
+      bz.getDayDiShi(),
+    ),
+    time: buildPillar(
+      bz.getTimeGan(),
+      bz.getTimeZhi(),
+      bz.getTime(),
+      bz.getTimeWuXing(),
+      bz.getTimeNaYin(),
+      bz.getTimeShiShenGan(),
+      bz.getTimeShiShenZhi(),
+      bz.getTimeHideGan(),
+      bz.getTimeDiShi(),
+    ),
   };
 
   // 五行计数：天干 + 地支主气（藏干首位）
@@ -114,11 +176,12 @@ export function buildBazi(clockTime: Date, gender: string): BaziResult {
 
   const birthYear = clockTime.getUTCFullYear();
 
-  // 大运（前 5 步）：起运按分钟精度（3 天折 1 年，sect=2），与排盘流派一致
+  // 大运（前 8 步）：起运按分钟精度（3 天折 1 年，sect=2），与排盘流派一致
+  // 覆盖至约 80 岁，为 L6 量子多线的深度分叉展开提供足够窗口
   const yun = bz.getYun(gender === 'female' ? 0 : 1, 2);
-  const rawDaYun = yun.getDaYun(6);
+  const rawDaYun = yun.getDaYun(10);
   const daYun: DaYunItem[] = rawDaYun
-    .slice(1, 6)
+    .slice(1, 9)
     .filter((d) => d.getGanZhi())
     .map((d) => ({
       index: d.getIndex(),
@@ -129,9 +192,9 @@ export function buildBazi(clockTime: Date, gender: string): BaziResult {
       endYear: d.getEndYear(),
     }));
 
-  // 当前所处大运（以 2026 为当前年）
-  const currentYear = 2026;
-  const currentDaYun = daYun.find((d) => currentYear >= d.startYear && currentYear <= d.endYear) ?? null;
+  // 当前所处大运（以调用方指定年份为当前年，缺省取系统当前年份，避免硬编码 2026 过期失真）
+  const currentDaYun =
+    daYun.find((d) => currentYear >= d.startYear && currentYear <= d.endYear) ?? null;
 
   return {
     gender,
@@ -146,7 +209,8 @@ export function buildBazi(clockTime: Date, gender: string): BaziResult {
     daYun,
     currentDaYun,
     birthYear,
-    sectNote: '流派口径：子时整时换日（23:00 起归次日，不分早晚子）；起运按分钟精度（3 天折 1 年）。如需古法夜子时口径，可在后续版本开放流派切换。',
+    sectNote:
+      '流派口径：子时整时换日（23:00 起归次日，不分早晚子）；起运按分钟精度（3 天折 1 年）。如需古法夜子时口径，可在后续版本开放流派切换。',
   };
 }
 

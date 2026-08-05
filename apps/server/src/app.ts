@@ -1,16 +1,26 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Db } from './db/client.js';
+import { createRepos } from './db/repo/index.js';
+import { config } from './config.js';
 import { authRoutes } from './routes/auth.js';
 import { archiveRoutes } from './routes/archives.js';
 import { calculateRoutes } from './routes/calculate.js';
 import { orderRoutes } from './routes/orders.js';
 import { planRoutes } from './routes/plans.js';
 import { kernelRoutes } from './routes/kernel.js';
+import { statsRoutes } from './routes/stats.js';
 import { fail, ok } from './lib/util.js';
+import { authenticate } from './lib/auth.js';
 import { createRateLimitHook } from './lib/rateLimit.js';
 import { registerCompression } from './lib/compress.js';
 import { searchCities } from './modules/l1/location.js';
+import { LAYER_META } from './report.js';
 
 export interface BuildAppOpts {
   logger?: boolean;
@@ -33,19 +43,22 @@ export interface BuildAppOpts {
 }
 
 /** 请求体上限（JSON API 场景 64KB 足够，防超大 body 资源耗尽） */
-const BODY_LIMIT = 64 * 1024;
+const BODY_LIMIT = config.bodyLimit;
 
 /** 全局默认限流：普通接口每 IP 300 次/分钟（RATE_LIMIT_MAX 可覆盖） */
-const GLOBAL_RATE_MAX = Number(process.env.RATE_LIMIT_MAX) || 300;
-const RATE_WINDOW_MS = 60 * 1000;
+const GLOBAL_RATE_MAX = config.globalRateMax;
+const RATE_WINDOW_MS = config.rateWindowMs;
 
 /** 认证/注册接口更严限流：每 IP 20 次/分钟，防验证码爆破与刷注册 */
-const AUTH_RATE_MAX = 20;
+const AUTH_RATE_MAX = config.authRateMax;
 
 function parseCorsOrigins(): string[] | null {
   const raw = process.env.CORS_ORIGIN;
   if (!raw) return null;
-  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function parseTrustProxy(): boolean | number | undefined {
@@ -56,11 +69,32 @@ function parseTrustProxy(): boolean | number | undefined {
   return raw === '1' || raw === 'true';
 }
 
+/**
+ * 生产静态托管目录：优先 WEB_DIST_DIR 环境变量，否则回退到前端构建产物
+ * （apps/web/dist，Docker 镜像内已合并）。
+ */
+function resolveWebDist(): string | null {
+  const env = process.env.WEB_DIST_DIR;
+  if (env && fs.existsSync(env)) return path.resolve(env);
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(here, '../../web/dist'),
+    path.resolve(here, '../../../web/dist'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, 'index.html'))) return c;
+  }
+  return null;
+}
+
 export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   const app = Fastify({
     logger: opts.logger ?? true,
     bodyLimit: BODY_LIMIT,
     trustProxy: opts.trustProxy ?? parseTrustProxy(),
+    /** 请求追踪：X-Request-Id 贯穿全链路（响应自动回显同头，日志随 requestId 关联） */
+    requestIdHeader: 'x-request-id',
+    genReqId: () => crypto.randomUUID(),
   });
 
   const whitelist = opts.corsOrigins ?? parseCorsOrigins();
@@ -83,32 +117,85 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     );
   }
 
+  /** 全局挂载鉴权 preHandler（路由以 { preHandler: app.authenticate } 声明） */
+  app.decorate('authenticate', authenticate);
+
+  /** 请求计时：onResponse 输出耗时与慢请求告警，供性能回归与生产定位 */
+  const SLOW_MS =
+    Number(process.env.SLOW_REQUEST_MS) > 0 ? Number(process.env.SLOW_REQUEST_MS) : 800;
+  app.addHook('onResponse', async (req, reply) => {
+    const ms = reply.elapsedTime ?? 0;
+    const base = {
+      path: req.url,
+      method: req.method,
+      statusCode: reply.statusCode,
+      ms: Math.round(ms),
+      userId: (req as { userId?: number }).userId ?? undefined,
+    };
+    if (ms > SLOW_MS) {
+      req.log.warn({ ...base }, '慢请求');
+    } else if (req.url.startsWith('/api')) {
+      req.log.info({ ...base }, '请求完成');
+    }
+  });
+
   /** 基础安全响应头：防 MIME 嗅探 / 点击劫持 / 页面内联泄露来源 */
-  app.addHook('onRequest', async (_req, reply) => {
+  app.addHook('onRequest', async (req, reply) => {
     reply.headers({
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
       'X-XSS-Protection': '1; mode=block',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+      /** 回显请求追踪 ID（客户端可传 X-Request-Id 覆盖），便于前后端联调定位 */
+      'X-Request-Id': req.id,
+      /** API 响应默认禁止缓存，避免鉴权数据（报告/手机号/订单）落入代理或浏览器缓存 */
+      'Cache-Control': 'no-store',
     });
   });
 
   /** 响应压缩（仅 gzip，体积达标才压缩） */
   registerCompression(app);
 
-  /** 未捕获异常统一收敛为 ApiResp JSON，避免暴露 HTML/堆栈给客户端 */
-  app.setErrorHandler((err: unknown, _req, reply) => {
-    const e = err as { statusCode?: number; message?: string };
+  /** 未捕获异常统一收敛为 ApiResp JSON，避免暴露 HTML/堆栈给客户端；服务端保留完整错误日志 */
+  app.setErrorHandler((err: unknown, req, reply) => {
+    const e = err as { statusCode?: number; message?: string; stack?: string };
     const status = Number(e.statusCode) || 500;
-    reply.code(status).send(
-      fail(status, status >= 500 ? '服务器开小差了，请稍后重试' : e.message ?? '请求处理失败'),
-    );
+    if (status >= 500) {
+      req.log.error({ err, path: req.url }, '未捕获异常');
+    } else {
+      req.log.warn({ err, path: req.url }, '请求被拒绝');
+    }
+    reply
+      .code(status)
+      .send(
+        fail(status, status >= 500 ? '服务器开小差了，请稍后重试' : (e.message ?? '请求处理失败')),
+      );
+  });
+
+  /** 未知 API 路由统一返回 ApiResp 结构（而非 Fastify 默认纯文本 404）；非 API 路径回退到前端 SPA index.html */
+  const webDist = resolveWebDist();
+  if (webDist) {
+    app.register(fastifyStatic, { root: webDist, prefix: '/', wildcard: false });
+    app.log.info({ dir: webDist }, '已托管前端静态资源');
+  } else {
+    app.log.warn('未找到前端构建产物，仅提供 API 服务');
+  }
+  app.setNotFoundHandler(async (req, reply) => {
+    const pathname = req.url.split('?')[0];
+    if (pathname.startsWith('/api')) {
+      return reply.code(404).send(fail(404, `接口不存在：${pathname}`));
+    }
+    if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {
+      return reply.type('text/html').send(fs.readFileSync(path.join(webDist, 'index.html')));
+    }
+    return reply.code(404).send({ code: 404, msg: 'Not Found', data: null });
   });
 
   /** 统一错误语义：业务 code≠200 时同步设置 HTTP status，避免 body 与状态码不一致 */
   app.addHook('onSend', async (_req, reply, payload) => {
-    if (typeof payload === 'string') {
+    // 状态码已非 2xx 的响应无需同步，直接透传，避免对错误/静态 payload 做无谓解析
+    if (typeof payload === 'string' && reply.statusCode >= 200 && reply.statusCode < 300) {
       try {
         const obj = JSON.parse(payload) as { code?: number };
         if (obj && typeof obj.code === 'number' && obj.code !== 200) {
@@ -121,29 +208,58 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     return payload;
   });
 
-  app.get('/api/health', async () => ({
-    ok: true,
-    name: 'fate-engine',
-    phase: 'phase5-payment',
-    layers: 'L1-L9 full',
-  }));
+  app.get('/api/health', async () => {
+    let dbOk = true;
+    let dbSizeBytes = 0;
+    try {
+      db.prepare('SELECT 1 AS ok').get();
+      const sizeRow = db
+        .prepare(
+          'SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()',
+        )
+        .get() as { bytes?: number };
+      dbSizeBytes = Number(sizeRow?.bytes) || 0;
+    } catch {
+      dbOk = false;
+    }
+    const mem = process.memoryUsage();
+    return {
+      ok: dbOk,
+      name: 'fate-engine',
+      version: '0.1.0',
+      env: config.env,
+      uptimeSeconds: Math.round(process.uptime()),
+      layers: LAYER_META.map((l) => ({ layer: l.layer, version: l.version })),
+      pid: process.pid,
+      memoryMB: Math.round(mem.rss / 1024 / 1024),
+      dbSizeMB: Math.round(dbSizeBytes / 1024 / 1024),
+      time: new Date().toISOString(),
+    };
+  });
 
   /** L1 城市检索（前端录入页自动补全） */
   app.get('/api/v1/locations/search', async (req) => {
-    const q = String((req.query as { q?: string }).q ?? '').trim().slice(0, 20);
+    const q = String((req.query as { q?: string }).q ?? '')
+      .trim()
+      .slice(0, 20);
     return ok(searchCities(q));
   });
 
+  const repos = createRepos(db);
+
   authRoutes(
     app,
-    db,
-    opts.rateLimit === false ? undefined : createRateLimitHook({ max: AUTH_RATE_MAX, windowMs: RATE_WINDOW_MS }),
+    repos,
+    opts.rateLimit === false
+      ? undefined
+      : createRateLimitHook({ max: AUTH_RATE_MAX, windowMs: RATE_WINDOW_MS }),
   );
-  archiveRoutes(app, db);
-  calculateRoutes(app, db);
-  orderRoutes(app, db);
-  planRoutes(app, db);
-  kernelRoutes(app, db);
+  archiveRoutes(app, repos);
+  calculateRoutes(app, repos);
+  orderRoutes(app, repos);
+  planRoutes(app, repos);
+  kernelRoutes(app, repos);
+  statsRoutes(app, repos);
 
   return app;
 }

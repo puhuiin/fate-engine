@@ -12,19 +12,30 @@
     "verify:l2": "tsx scripts/verify_l2.ts",
     "verify:l3": "tsx scripts/verify_l3.ts",
     "verify:api": "tsx scripts/verify_api.ts",
-    "verify": "tsx scripts/verify_all.ts && tsx scripts/verify_l1.ts && tsx scripts/verify_l2.ts && tsx scripts/verify_l3.ts && tsx scripts/verify_api.ts"
+    "verify:migrate": "tsx scripts/verify_migrate.ts",
+    "verify": "tsx scripts/verify_all.ts && tsx scripts/verify_l1.ts && tsx scripts/verify_l2.ts && tsx scripts/verify_l3.ts && tsx scripts/verify_api.ts && tsx scripts/verify_migrate.ts",
+    "lint": "eslint src scripts",
+    "lint:fix": "eslint src scripts --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"scripts/**/*.ts\""
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
+    "@fastify/static": "^10.1.2",
     "better-sqlite3": "^11.7.0",
     "fastify": "^5.2.0",
     "lunar-javascript": "^1.7.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.2",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.66.0"
   }
 }

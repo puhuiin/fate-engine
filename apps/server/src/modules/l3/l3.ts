@@ -24,10 +24,26 @@ export interface L3Output {
 
 const DIMENSIONS: Array<{ wuxing: string; dimension: string; desc: string }> = [
   { wuxing: '木', dimension: '开放性（探索与创新）', desc: '对新事物保持好奇，乐于尝试多元思路。' },
-  { wuxing: '火', dimension: '外向性（表达与行动）', desc: '倾向主动表达、快速行动，有带动氛围的能量。' },
-  { wuxing: '土', dimension: '尽责性（稳定与执行）', desc: '行事沉稳可靠，擅长长期坚持与落地执行。' },
-  { wuxing: '金', dimension: '条理性（规则与精确）', desc: '重视逻辑秩序与质量标准，细节把控敏锐。' },
-  { wuxing: '水', dimension: '宜人性（洞察与适应）', desc: '共情与观察力强，善于沟通协调与随机应变。' },
+  {
+    wuxing: '火',
+    dimension: '外向性（表达与行动）',
+    desc: '倾向主动表达、快速行动，有带动氛围的能量。',
+  },
+  {
+    wuxing: '土',
+    dimension: '尽责性（稳定与执行）',
+    desc: '行事沉稳可靠，擅长长期坚持与落地执行。',
+  },
+  {
+    wuxing: '金',
+    dimension: '条理性（规则与精确）',
+    desc: '重视逻辑秩序与质量标准，细节把控敏锐。',
+  },
+  {
+    wuxing: '水',
+    dimension: '宜人性（洞察与适应）',
+    desc: '共情与观察力强，善于沟通协调与随机应变。',
+  },
 ];
 
 const STRENGTH_PROFILE: Record<string, string> = {

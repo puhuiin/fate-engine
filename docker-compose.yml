@@ -1,0 +1,32 @@
+services:
+  fate:
+    build: .
+    image: fate-engine:latest
+    container_name: fate-engine
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOST: 0.0.0.0
+      # 生产环境必须显式提供签名密钥，未设置将拒绝启动
+      FATE_SECRET: ${FATE_SECRET:?FATE_SECRET is required in production}
+      # CORS 白名单（逗号分隔），生产建议显式配置而非全开
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      DB_PATH: /app/data/fate.db
+      FATE_TOKEN_TTL_SECONDS: ${FATE_TOKEN_TTL_SECONDS:-604800}
+      FATE_ORDER_TTL_SECONDS: ${FATE_ORDER_TTL_SECONDS:-1800}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-300}
+      TRUST_PROXY: ${TRUST_PROXY:-}
+    volumes:
+      - fate-data:/app/data
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  fate-data:

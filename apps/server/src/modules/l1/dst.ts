@@ -11,12 +11,30 @@ export interface ChinaDstRange {
 
 /** 各年份夏令时区间（当地时间，结束时刻含 = 2:00 时刻起结束） */
 export const CHINA_DST_RANGES: Record<number, ChinaDstRange> = {
-  1986: { start: { month: 5, day: 4, hour: 2, minute: 0 }, end: { month: 9, day: 14, hour: 2, minute: 0 } },
-  1987: { start: { month: 4, day: 12, hour: 2, minute: 0 }, end: { month: 9, day: 13, hour: 2, minute: 0 } },
-  1988: { start: { month: 4, day: 10, hour: 2, minute: 0 }, end: { month: 9, day: 11, hour: 2, minute: 0 } },
-  1989: { start: { month: 4, day: 16, hour: 2, minute: 0 }, end: { month: 9, day: 17, hour: 2, minute: 0 } },
-  1990: { start: { month: 4, day: 15, hour: 2, minute: 0 }, end: { month: 9, day: 16, hour: 2, minute: 0 } },
-  1991: { start: { month: 4, day: 14, hour: 2, minute: 0 }, end: { month: 9, day: 15, hour: 2, minute: 0 } },
+  1986: {
+    start: { month: 5, day: 4, hour: 2, minute: 0 },
+    end: { month: 9, day: 14, hour: 2, minute: 0 },
+  },
+  1987: {
+    start: { month: 4, day: 12, hour: 2, minute: 0 },
+    end: { month: 9, day: 13, hour: 2, minute: 0 },
+  },
+  1988: {
+    start: { month: 4, day: 10, hour: 2, minute: 0 },
+    end: { month: 9, day: 11, hour: 2, minute: 0 },
+  },
+  1989: {
+    start: { month: 4, day: 16, hour: 2, minute: 0 },
+    end: { month: 9, day: 17, hour: 2, minute: 0 },
+  },
+  1990: {
+    start: { month: 4, day: 15, hour: 2, minute: 0 },
+    end: { month: 9, day: 16, hour: 2, minute: 0 },
+  },
+  1991: {
+    start: { month: 4, day: 14, hour: 2, minute: 0 },
+    end: { month: 9, day: 15, hour: 2, minute: 0 },
+  },
 };
 
 function toMinutes(m: number, d: number, h: number, mi: number): number {
@@ -36,12 +54,7 @@ export function inChinaDst(clockTime: Date): boolean {
     clockTime.getUTCHours(),
     clockTime.getUTCMinutes(),
   );
-  const s = toMinutes(
-    range.start.month,
-    range.start.day,
-    range.start.hour,
-    range.start.minute,
-  );
+  const s = toMinutes(range.start.month, range.start.day, range.start.hour, range.start.minute);
   const e = toMinutes(range.end.month, range.end.day, range.end.hour, range.end.minute);
   return t >= s && t < e;
 }

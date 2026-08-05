@@ -2,9 +2,8 @@
  * L8 七级分级改运执行方案（V13）
  * PRD 七级改运体系：环境布局 / 行为抉择 / 认知思维 / 习惯体系 /
  * 因果化解 / 信息维度重构 / 心性破执。
- * 每级基于六维评分与主卡点动态生成可落地条目，并落库 luck_plan 表。
+ * 每级基于六维评分与主卡点动态生成可落地条目（纯计算模块，落库由数据层完成）。
  */
-import type { Db } from '../../db/client.js';
 import type { BaziResult } from '../l2/bazi.js';
 import type { L4Output } from '../l4/l4.js';
 import type { L5Output } from '../l5/l5.js';
@@ -26,6 +25,25 @@ export interface L8Output {
   note: string;
 }
 
+export interface PlanRowInput {
+  level: number;
+  title: string;
+  content: string;
+  execCycle: string;
+}
+
+/** 将 L8 七级方案输出扁平化为 luck_plan 落库行（纯映射，写库由数据层完成） */
+export function toPlanRows(l8: L8Output): PlanRowInput[] {
+  return l8.levels.flatMap((lv) =>
+    lv.items.map((it) => ({
+      level: lv.level,
+      title: it.title,
+      content: it.content,
+      execCycle: it.execCycle,
+    })),
+  );
+}
+
 const LEVEL_NAMES = [
   '环境布局',
   '行为抉择',
@@ -37,7 +55,8 @@ const LEVEL_NAMES = [
 ];
 
 const KNOT_REFRAME: Record<string, string> = {
-  求认可与自我证明: '把「我要被认可」改写为「我认可我自己」，建立一份独立于外界评价的自我价值清单。',
+  求认可与自我证明:
+    '把「我要被认可」改写为「我认可我自己」，建立一份独立于外界评价的自我价值清单。',
   内在高压与紧绷: '允许「及格就好」的弹性标准，高压并非专业性的同义词，给自己设定安全阀。',
   规则依赖与框架感: '练习在没有现成规则的情境下做小决策，逐步训练对模糊的耐受度。',
   惯性依赖与行动迟滞: '把「想清楚再做」改写为「先做一版再说」，行动本身会产出信息。',
@@ -48,7 +67,8 @@ const KNOT_REFRAME: Record<string, string> = {
 };
 
 const KNOT_ACTION: Record<string, string> = {
-  求认可与自我证明: '给过去某次「没被认可」的经历写一封信（不寄出），写完划掉，完成一次象征性的放下。',
+  求认可与自我证明:
+    '给过去某次「没被认可」的经历写一封信（不寄出），写完划掉，完成一次象征性的放下。',
   内在高压与紧绷: '把长期压力清单逐条写出来，划掉所有「不是今天必须」的项，给大脑做一次清理。',
   规则依赖与框架感: '本周在无规则场景做 3 次小决定（如换条路走、点没吃过的菜），训练弹性。',
   惯性依赖与行动迟滞: '为正在酝酿的事设置 24 小时「启动倒计时」，到点就发出第一版。',
@@ -70,18 +90,16 @@ export function runL8(l4: L4Output, l5: L5Output, bazi: BaziResult): L8Output {
       items: [
         {
           title: '打造「目标可见」的工作/学习区',
-          content:
-            weak.some((d) => d.key === 'career' || d.key === 'wealth')
-              ? '固定并优化工作/学习区：清除干扰物、保证光线，布置能提醒目标的视觉锚点（年度目标墙、待办看板）。'
-              : '整理工作/学习区，让「最重要的三件事」处于一眼可见的位置。',
+          content: weak.some((d) => d.key === 'career' || d.key === 'wealth')
+            ? '固定并优化工作/学习区：清除干扰物、保证光线，布置能提醒目标的视觉锚点（年度目标墙、待办看板）。'
+            : '整理工作/学习区，让「最重要的三件事」处于一眼可见的位置。',
           execCycle: '一次性 + 每周微调',
         },
         {
           title: '优化睡眠环境',
-          content:
-            weak.some((d) => d.key === 'health')
-              ? '优化睡眠环境（遮光、控温、电子设备移出卧室），睡眠是最划算的长期投资。'
-              : '保持卧室的遮光与安静，固定入睡与起床时间。',
+          content: weak.some((d) => d.key === 'health')
+            ? '优化睡眠环境（遮光、控温、电子设备移出卧室），睡眠是最划算的长期投资。'
+            : '保持卧室的遮光与安静，固定入睡与起床时间。',
           execCycle: '每周',
         },
       ],
@@ -108,12 +126,15 @@ export function runL8(l4: L4Output, l5: L5Output, bazi: BaziResult): L8Output {
       items: [
         {
           title: `针对「${knotName}」的认知重构`,
-          content: KNOT_REFRAME[knotName] ?? '练习「事实-解读」分离：先记录客观事实，再标记自己的主观解读，避免自动联想。',
+          content:
+            KNOT_REFRAME[knotName] ??
+            '练习「事实-解读」分离：先记录客观事实，再标记自己的主观解读，避免自动联想。',
           execCycle: '持续 + 每日复盘',
         },
         {
           title: '事实与解读分离练习',
-          content: '遇到负面反馈时，先区分「发生了什么」与「我认为它意味着什么」，给自己留出理性间隙。',
+          content:
+            '遇到负面反馈时，先区分「发生了什么」与「我认为它意味着什么」，给自己留出理性间隙。',
           execCycle: '每日',
         },
       ],
@@ -140,7 +161,8 @@ export function runL8(l4: L4Output, l5: L5Output, bazi: BaziResult): L8Output {
       items: [
         {
           title: `「${knotName}」的化解动作`,
-          content: KNOT_ACTION[knotName] ?? '主动处理一段积压的关系：一次真诚的沟通，胜过反复的内耗。',
+          content:
+            KNOT_ACTION[knotName] ?? '主动处理一段积压的关系：一次真诚的沟通，胜过反复的内耗。',
           execCycle: '一次性',
         },
         {
@@ -188,16 +210,4 @@ export function runL8(l4: L4Output, l5: L5Output, bazi: BaziResult): L8Output {
     levels,
     note: `七级方案按「由外到内」排列：先改环境与行为（最快见效），再深入认知与心性（最持久）。日主${bazi.dayMaster.gan}（${bazi.dayMaster.wuxing}）提示的本性倾向已融入各条内容；执行时以 30 天为一个周期复盘迭代。`,
   };
-}
-
-/** 将七级方案落库 luck_plan 表（应在调用方事务内执行，避免记录与方案出现孤儿数据） */
-export function insertLuckPlans(db: Db, recordId: number, l8: L8Output): void {
-  const stmt = db.prepare(
-    'INSERT INTO luck_plan (record_id, level, title, content, exec_cycle) VALUES (?, ?, ?, ?, ?)',
-  );
-  for (const level of l8.levels) {
-    for (const item of level.items) {
-      stmt.run(recordId, level.level, item.title, item.content, item.execCycle);
-    }
-  }
 }

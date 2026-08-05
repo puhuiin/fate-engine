@@ -1,14 +1,7 @@
 /** lunar-javascript 最小类型声明（仅声明本工程使用的 API） */
 declare module 'lunar-javascript' {
   export class Solar {
-    static fromYmdHms(
-      y: number,
-      m: number,
-      d: number,
-      h: number,
-      min: number,
-      s: number,
-    ): Solar;
+    static fromYmdHms(y: number, m: number, d: number, h: number, min: number, s: number): Solar;
     getLunar(): Lunar;
     getYear(): number;
     getMonth(): number;
@@ -28,6 +21,8 @@ declare module 'lunar-javascript' {
     getYear(): number;
     getMonth(): number;
     getDay(): number;
+    getDayGan(): string;
+    getDayZhi(): string;
     getMonthInChinese(): string;
     /** 当日节气名，无则空串 */
     getJieQi(): string;

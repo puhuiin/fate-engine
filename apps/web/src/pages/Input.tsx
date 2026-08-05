@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Skeleton } from '../components/Skeleton';
 import {
   calculate,
   createArchive,
@@ -31,6 +32,24 @@ const GENDERS = [
   { value: 'other', label: '其他/保密' },
 ];
 
+const CALC_TYPES = [
+  {
+    value: 'standard',
+    label: '标准测算',
+    desc: '九层全量报告 + 3 个关键分叉点',
+  },
+  {
+    value: 'quantum',
+    label: '量子展开',
+    desc: '分叉点展开至 5 个，附各行运窗口',
+  },
+  {
+    value: 'ultimate',
+    label: '终极演算',
+    desc: '全生命周期分叉点 + 完整行运窗口',
+  },
+];
+
 const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
   .toISOString()
   .slice(0, 10);
@@ -47,6 +66,7 @@ export default function Input() {
   const [cityQuery, setCityQuery] = useState('');
   const [cities, setCities] = useState<City[]>([]);
   const [city, setCity] = useState<City | null>(null);
+  const [calcType, setCalcType] = useState('standard');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
@@ -60,6 +80,7 @@ export default function Input() {
     getArchive(editId)
       .then((res) => {
         if (!alive) return;
+        if (res.code !== 200) throw new Error(res.msg || '档案不存在或无权访问');
         const a = res.data;
         setSolarDate(a.solar_date);
         setSolarTime(a.solar_time ? a.solar_time.slice(0, 5) : '');
@@ -76,7 +97,7 @@ export default function Input() {
           });
         }
       })
-      .catch(() => setError('加载档案失败，请返回重试'))
+      .catch((e) => setError(e instanceof Error ? e.message : '加载档案失败，请返回重试'))
       .finally(() => alive && setEditing(false));
     return () => {
       alive = false;
@@ -119,6 +140,9 @@ export default function Input() {
     try {
       if (!localStorage.getItem('fate_token')) {
         const guest = await guestLogin();
+        if (guest.code !== 200) {
+          throw new Error(guest.msg || '游客登录失败，请重试');
+        }
         setToken(guest.data.token);
       }
       const payload = {
@@ -131,10 +155,16 @@ export default function Input() {
         longitude: city?.longitude,
         latitude: city?.latitude,
       };
-      const archive = editId
-        ? await updateArchive(editId, payload)
-        : await createArchive(payload);
-      const calc = await calculate(archive.data.id, 'standard');
+      const res = editId ? await updateArchive(editId, payload) : await createArchive(payload);
+      if (res.code !== 200) {
+        setError(res.msg || '保存档案失败，请重试');
+        return;
+      }
+      const calc = await calculate(res.data.id, calcType);
+      if (calc.code !== 200) {
+        setError(calc.msg || '测算失败，请重试');
+        return;
+      }
       navigate('/loading', { state: { recordId: calc.data.recordId } });
     } catch (e) {
       setError(e instanceof Error ? e.message : '测算失败，请重试');
@@ -153,7 +183,9 @@ export default function Input() {
     >
       <h2>{editId ? '编辑生辰信息' : '录入生辰信息'}</h2>
       <p className="hint">
-        {editId ? '修改后将重新测算并生成新的报告，原记录保留可回溯。' : '用于时空校正层（L1）的真太阳时与误差评级，你的信息将脱敏存储。'}
+        {editId
+          ? '修改后将重新测算并生成新的报告，原记录保留可回溯。'
+          : '用于时空校正层（L1）的真太阳时与误差评级，你的信息将脱敏存储。'}
       </p>
 
       <label className="field">
@@ -171,7 +203,12 @@ export default function Input() {
       {timeVisible && (
         <label className="field">
           <span>出生时间（钟表时间）</span>
-          <input type="time" autoComplete="off" value={solarTime} onChange={(e) => setSolarTime(e.target.value)} />
+          <input
+            type="time"
+            autoComplete="off"
+            value={solarTime}
+            onChange={(e) => setSolarTime(e.target.value)}
+          />
         </label>
       )}
 
@@ -215,6 +252,25 @@ export default function Input() {
         </div>
       </div>
 
+      <div className="field">
+        <span>测算模式</span>
+        <div className="calc-type-row">
+          {CALC_TYPES.map((c) => (
+            <label key={c.value} className={`calc-type ${calcType === c.value ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="calcType"
+                value={c.value}
+                checked={calcType === c.value}
+                onChange={() => setCalcType(c.value)}
+              />
+              <strong>{c.label}</strong>
+              <span>{c.desc}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
       <label className="field">
         <span>出生城市</span>
         <input
@@ -248,7 +304,13 @@ export default function Input() {
 
       {error && <p className="error">{error}</p>}
 
-      {editing && <p className="dim">正在读取档案…</p>}
+      {editing && (
+        <div className="skeleton-field">
+          <Skeleton style={{ width: '30%' }} />
+          <Skeleton style={{ width: '100%', height: 40 }} />
+          <Skeleton style={{ width: '100%', height: 40 }} />
+        </div>
+      )}
 
       <button type="submit" className="primary" disabled={busy || editing}>
         {editing ? '读取中…' : busy ? '演算中…' : editId ? '保存并重新测算' : '开始测算'}

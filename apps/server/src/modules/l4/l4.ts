@@ -79,19 +79,26 @@ export function runL4(bazi: BaziResult): L4Output {
     decision: clamp(55 + countOf('七杀') * 10 + countOf('偏印') * 6),
   };
 
-  // 流年分：以当前大运天干五行与日主生克定基调，2026 为当前年
+  // 流年分：以当前大运天干五行与日主生克定基调（大运定位年份取自 L2 当前年份）
   const daYunWx = bazi.currentDaYun?.ganzhi?.[0]
-    ? ({ 甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土', 己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水' } as Record<string, string>)[bazi.currentDaYun.ganzhi[0]] ?? ''
+    ? ((
+        {
+          甲: '木',
+          乙: '木',
+          丙: '火',
+          丁: '火',
+          戊: '土',
+          己: '土',
+          庚: '金',
+          辛: '金',
+          壬: '水',
+          癸: '水',
+        } as Record<string, string>
+      )[bazi.currentDaYun.ganzhi[0]] ?? '')
     : '';
   const rel = daYunWx ? relation(daYunWx, dayWx) : 'same';
   const flowBase =
-    rel === 'same' || rel === 'sheng'
-      ? 62
-      : rel === 'beSheng'
-        ? 58
-        : rel === 'ke'
-          ? 50
-          : 55;
+    rel === 'same' || rel === 'sheng' ? 62 : rel === 'beSheng' ? 58 : rel === 'ke' ? 50 : 55;
 
   const liunian = {
     career: clamp(flowBase + (rel === 'beKe' ? -6 : rel === 'ke' ? -3 : 3)),
@@ -119,8 +126,13 @@ export function runL4(bazi: BaziResult): L4Output {
       xiantian: xiantian.career,
       liunian: liunian.career,
       renwei: renwei.career,
-      total: clamp(xiantian.career * WEIGHTS.xiantian + liunian.career * WEIGHTS.liunian + renwei.career * WEIGHTS.renwei),
-      advice: '围绕优势技能做长期积累，主动争取能放大自己强项的角色，年度内为自己设定一个可衡量的突破目标。',
+      total: clamp(
+        xiantian.career * WEIGHTS.xiantian +
+          liunian.career * WEIGHTS.liunian +
+          renwei.career * WEIGHTS.renwei,
+      ),
+      advice:
+        '围绕优势技能做长期积累，主动争取能放大自己强项的角色，年度内为自己设定一个可衡量的突破目标。',
     },
     {
       key: 'wealth',
@@ -128,7 +140,11 @@ export function runL4(bazi: BaziResult): L4Output {
       xiantian: xiantian.wealth,
       liunian: liunian.wealth,
       renwei: renwei.wealth,
-      total: clamp(xiantian.wealth * WEIGHTS.xiantian + liunian.wealth * WEIGHTS.liunian + renwei.wealth * WEIGHTS.renwei),
+      total: clamp(
+        xiantian.wealth * WEIGHTS.xiantian +
+          liunian.wealth * WEIGHTS.liunian +
+          renwei.wealth * WEIGHTS.renwei,
+      ),
       advice: '建立记账与储蓄习惯，用 6-12 个月验证一个副业或技能变现方向，控制杠杆与负债比例。',
     },
     {
@@ -137,8 +153,13 @@ export function runL4(bazi: BaziResult): L4Output {
       xiantian: xiantian.marriage,
       liunian: liunian.marriage,
       renwei: renwei.marriage,
-      total: clamp(xiantian.marriage * WEIGHTS.xiantian + liunian.marriage * WEIGHTS.liunian + renwei.marriage * WEIGHTS.renwei),
-      advice: '明确自己在关系中的核心需求并学会表达，把「沟通练习」当作日常习惯，比等待缘分更有意义。',
+      total: clamp(
+        xiantian.marriage * WEIGHTS.xiantian +
+          liunian.marriage * WEIGHTS.liunian +
+          renwei.marriage * WEIGHTS.renwei,
+      ),
+      advice:
+        '明确自己在关系中的核心需求并学会表达，把「沟通练习」当作日常习惯，比等待缘分更有意义。',
     },
     {
       key: 'social',
@@ -146,7 +167,11 @@ export function runL4(bazi: BaziResult): L4Output {
       xiantian: xiantian.social,
       liunian: liunian.social,
       renwei: renwei.social,
-      total: clamp(xiantian.social * WEIGHTS.xiantian + liunian.social * WEIGHTS.liunian + renwei.social * WEIGHTS.renwei),
+      total: clamp(
+        xiantian.social * WEIGHTS.xiantian +
+          liunian.social * WEIGHTS.liunian +
+          renwei.social * WEIGHTS.renwei,
+      ),
       advice: '主动维护高质量关系网络，每周为 2-3 个重要关系做一次有深度的连接。',
     },
     {
@@ -155,7 +180,11 @@ export function runL4(bazi: BaziResult): L4Output {
       xiantian: xiantian.health,
       liunian: liunian.health,
       renwei: renwei.health,
-      total: clamp(xiantian.health * WEIGHTS.xiantian + liunian.health * WEIGHTS.liunian + renwei.health * WEIGHTS.renwei),
+      total: clamp(
+        xiantian.health * WEIGHTS.xiantian +
+          liunian.health * WEIGHTS.liunian +
+          renwei.health * WEIGHTS.renwei,
+      ),
       advice: '固定作息与适量运动是成本最低的健康投资，先从每周 3 次、每次 30 分钟开始。',
     },
     {
@@ -164,7 +193,11 @@ export function runL4(bazi: BaziResult): L4Output {
       xiantian: xiantian.decision,
       liunian: liunian.decision,
       renwei: renwei.decision,
-      total: clamp(xiantian.decision * WEIGHTS.xiantian + liunian.decision * WEIGHTS.liunian + renwei.decision * WEIGHTS.renwei),
+      total: clamp(
+        xiantian.decision * WEIGHTS.xiantian +
+          liunian.decision * WEIGHTS.liunian +
+          renwei.decision * WEIGHTS.renwei,
+      ),
       advice: '重大决策前列出利弊清单并给每个选项设定「退出条件」，避免情绪化一次性决定。',
     },
   ];

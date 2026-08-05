@@ -1,20 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
-import { fail, ok, parseId } from '../lib/util.js';
-import type { Db } from '../db/client.js';
-import { requireAuth } from './auth.js';
+import { config } from '../config.js';
+import { ok } from '../lib/util.js';
+import { ApiError } from '../lib/errors.js';
+import { assertSchema, requireIdParam } from '../lib/http.js';
+import type { Repos } from '../db/repo/index.js';
 import { lockedLayers } from '../report.js';
+import { orderCreateSchema, orderPaySchema } from '../schema.js';
 
 /** 深度报告解锁价格（分）：¥99 */
-const UNLOCK_PRICE_CENTS = 9900;
+const UNLOCK_PRICE_CENTS = config.unlockPriceCents;
 
 /** 支付渠道白名单（mock 为开发模拟渠道） */
-const PAY_CHANNELS = new Set(['mock', 'wechat', 'alipay']);
+const PAY_CHANNELS = new Set(config.payChannels);
 
-interface RecordRow {
-  id: number;
-  paid_status: number;
-}
+/** 待支付订单有效期：默认 30 分钟，超时自动失效（防僵尸订单堆积） */
+const ORDER_TTL_MS = config.orderTtlMs;
 
 type OrderRow = Record<string, unknown>;
 
@@ -24,132 +25,151 @@ function orderPublic(o: OrderRow): OrderRow {
   return rest;
 }
 
-export function orderRoutes(app: FastifyInstance, db: Db): void {
+export function orderRoutes(app: FastifyInstance, repos: Repos): void {
+  /** 我的订单历史：全部订单倒序（含关联测算摘要），供「我的记录」页订单区展示 */
+  app.get('/api/v1/orders', { preHandler: app.authenticate }, async (req) => {
+    const rows = repos.orders.listByUser(req.userId);
+    return ok(rows.map(orderPublic));
+  });
+
   /** 为指定测算记录创建解锁订单（已付费直接返回已解锁） */
-  app.post('/api/v1/orders', { preHandler: requireAuth }, async (req, reply) => {
-    const body = (req.body ?? {}) as { recordId?: number };
-    const recordId = parseId(body.recordId);
-    if (!recordId) {
-      return reply.send(fail(400, 'recordId 参数错误'));
-    }
-    const record = db
-      .prepare('SELECT id, paid_status FROM calculate_record WHERE id = ? AND user_id = ?')
-      .get(recordId, req.userId) as RecordRow | undefined;
+  app.post('/api/v1/orders', { preHandler: app.authenticate }, async (req, reply) => {
+    const { recordId } = assertSchema(orderCreateSchema, req.body ?? {}, 'recordId 参数错误');
+    const record = repos.records.findMetaById(recordId, req.userId);
     if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
+      throw new ApiError(404, '记录不存在或无权访问');
     }
     if (record.paid_status === 1) {
       return reply.send(ok({ alreadyUnlocked: true, paidStatus: 1 }, '已解锁'));
     }
 
-    const tx = db.transaction((): { existing?: OrderRow; created?: OrderRow } => {
-      const pending = db
-        .prepare(
-          `SELECT * FROM order_pay
-           WHERE record_id = ? AND user_id = ? AND entitlement_status = 'pending'
-           ORDER BY id DESC LIMIT 1`,
-        )
-        .get(recordId, req.userId) as OrderRow | undefined;
+    const tx = repos.db.transaction((): { existing?: OrderRow; created?: OrderRow } => {
+      // 过期的待支付订单统一作废，避免用户被陈年僵尸订单卡住
+      repos.orders.expirePendingByRecord(recordId, req.userId, ORDER_TTL_MS);
+      const pending = repos.orders.latestPendingByRecord(recordId, req.userId);
       if (pending) return { existing: pending };
       const orderNo = `FT${Date.now()}${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
-      const info = db
-        .prepare(
-          `INSERT INTO order_pay (order_no, user_id, record_id, amount_cents, entitlement_status)
-           VALUES (?, ?, ?, ?, 'pending')`,
-        )
-        .run(orderNo, req.userId, recordId, UNLOCK_PRICE_CENTS);
-      const created = db
-        .prepare('SELECT * FROM order_pay WHERE id = ?')
-        .get(Number(info.lastInsertRowid)) as OrderRow | undefined;
+      const orderId = repos.orders.insert(recordId, req.userId, UNLOCK_PRICE_CENTS, orderNo);
+      const created = repos.orders.findById(orderId);
       return { created };
     });
     const result = tx();
     if (result.existing) {
-      return reply.send(ok({ order: orderPublic(result.existing), alreadyUnlocked: false }, '存在待支付订单'));
+      return reply.send(
+        ok({ order: orderPublic(result.existing), alreadyUnlocked: false }, '存在待支付订单'),
+      );
     }
-    return reply.send(ok({ order: orderPublic(result.created as OrderRow), alreadyUnlocked: false }, '订单已创建'));
+    return reply.send(
+      ok({ order: orderPublic(result.created as OrderRow), alreadyUnlocked: false }, '订单已创建'),
+    );
   });
 
   /**
    * 模拟支付成功（开发阶段：无需真实支付回调）。
    * 生产环境替换为第三方支付回调签名校验，成功后调用本逻辑。
    */
-  app.post('/api/v1/orders/:id/pay', { preHandler: requireAuth }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
-    const body = (req.body ?? {}) as { channel?: string };
-    const channel = String(body.channel ?? 'mock').trim();
+  app.post('/api/v1/orders/:id/pay', { preHandler: app.authenticate }, async (req, reply) => {
+    const id = requireIdParam(req, 'id');
+    const { channel } = assertSchema(
+      orderPaySchema,
+      req.body ?? {},
+      'pay_channel 不合法（mock/wechat/alipay）',
+    );
     if (!PAY_CHANNELS.has(channel)) {
-      return reply.send(fail(400, 'pay_channel 不合法（mock/wechat/alipay）'));
+      throw new ApiError(400, 'pay_channel 不合法（mock/wechat/alipay）');
     }
-    const order = db
-      .prepare('SELECT * FROM order_pay WHERE id = ? AND user_id = ?')
-      .get(id, req.userId) as (Record<string, unknown> & {
-      id: number;
-      record_id: number | null;
-      entitlement_status: string;
-    }) | undefined;
+    const order = repos.orders.findByIdAndUser<
+      Record<string, unknown> & {
+        id: number;
+        record_id: number | null;
+        entitlement_status: string;
+        created_at: string;
+      }
+    >(id, req.userId);
     if (!order) {
-      return reply.send(fail(404, '订单不存在或无权访问'));
+      throw new ApiError(404, '订单不存在或无权访问');
     }
     if (order.entitlement_status === 'granted') {
       return reply.send(ok({ order: orderPublic(order), paidStatus: 1 }, '订单已支付'));
     }
+    if (order.entitlement_status === 'expired') {
+      throw new ApiError(410, '订单已过期，请重新下单');
+    }
     if (!order.record_id) {
-      return reply.send(fail(400, '订单未关联测算记录'));
+      throw new ApiError(400, '订单未关联测算记录');
+    }
+    if (repos.orders.isExpired(order.created_at, ORDER_TTL_MS)) {
+      repos.orders.markExpired(order.id);
+      throw new ApiError(410, '订单已过期，请重新下单');
     }
 
-    const rec = db
+    const rec = repos.db
       .prepare('SELECT paid_status FROM calculate_record WHERE id = ?')
-      .get(order.record_id) as RecordRow | undefined;
+      .get(order.record_id) as { paid_status: number } | undefined;
     if (rec && rec.paid_status === 1) {
-      db.prepare(
-        `UPDATE order_pay SET entitlement_status = 'granted'
-         WHERE id = ? AND entitlement_status = 'pending'`,
-      ).run(order.id);
-      const granted = db.prepare('SELECT * FROM order_pay WHERE id = ?').get(order.id);
-      return reply.send(ok({ order: orderPublic(granted as OrderRow), paidStatus: 1 }, '记录已解锁'));
+      repos.orders.markGrantedById(order.id);
+      const granted = repos.orders.findById(order.id);
+      return reply.send(
+        ok({ order: orderPublic(granted as OrderRow), paidStatus: 1 }, '记录已解锁'),
+      );
     }
 
-    const tx = db.transaction(() => {
-      db.prepare(
-        `UPDATE order_pay SET entitlement_status = 'granted', pay_channel = ?
-         WHERE id = ?`,
-      ).run(channel, order.id);
-      db.prepare('UPDATE calculate_record SET paid_status = 1 WHERE id = ?').run(order.record_id);
+    const tx = repos.db.transaction(() => {
+      repos.orders.markGranted(order.id, channel);
+      repos.records.markPaid(order.record_id as number);
     });
     tx();
 
-    const granted = db.prepare('SELECT * FROM order_pay WHERE id = ?').get(order.id);
-    return reply.send(ok({ order: orderPublic(granted as OrderRow), paidStatus: 1 }, '支付成功，深度报告已解锁'));
+    const granted = repos.orders.findById(order.id);
+    return reply.send(
+      ok({ order: orderPublic(granted as OrderRow), paidStatus: 1 }, '支付成功，深度报告已解锁'),
+    );
+  });
+
+  /**
+   * 取消待支付订单：用户主动放弃本次解锁。
+   * 已支付（granted）/已过期（expired）不可取消，返回明确语义。
+   */
+  app.post('/api/v1/orders/:id/cancel', { preHandler: app.authenticate }, async (req, reply) => {
+    const id = requireIdParam(req, 'id');
+    const order = repos.orders.findByIdAndUser<
+      Record<string, unknown> & {
+        id: number;
+        entitlement_status: string;
+      }
+    >(id, req.userId);
+    if (!order) {
+      throw new ApiError(404, '订单不存在或无权访问');
+    }
+    if (order.entitlement_status === 'granted') {
+      throw new ApiError(400, '订单已支付，无法取消');
+    }
+    if (order.entitlement_status === 'expired') {
+      throw new ApiError(410, '订单已过期');
+    }
+    repos.orders.markExpired(order.id);
+    const updated = repos.orders.findById(order.id);
+    return reply.send(ok(orderPublic(updated as OrderRow), '订单已取消'));
   });
 
   /** 查询某记录解锁状态与最新订单 */
-  app.get('/api/v1/orders/status/:recordId', { preHandler: requireAuth }, async (req, reply) => {
-    const recordId = parseId((req.params as { recordId: string }).recordId);
-    if (!recordId) {
-      return reply.send(fail(400, '参数 recordId 不合法'));
-    }
-    const record = db
-      .prepare('SELECT paid_status FROM calculate_record WHERE id = ? AND user_id = ?')
-      .get(recordId, req.userId) as RecordRow | undefined;
-    if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
-    }
-    const order = db
-      .prepare(
-        `SELECT * FROM order_pay WHERE record_id = ? AND user_id = ?
-         ORDER BY id DESC LIMIT 1`,
-      )
-      .get(recordId, req.userId);
-    return reply.send(
-      ok({
-        paidStatus: record.paid_status,
-        lockedLayers: lockedLayers(record.paid_status === 1),
-        order: order ? orderPublic(order as OrderRow) : null,
-      }),
-    );
-  });
+  app.get(
+    '/api/v1/orders/status/:recordId',
+    { preHandler: app.authenticate },
+    async (req, reply) => {
+      const recordId = requireIdParam(req, 'recordId');
+      const record = repos.records.findMetaById(recordId, req.userId);
+      if (!record) {
+        throw new ApiError(404, '记录不存在或无权访问');
+      }
+      const order = repos.orders.latestByRecord(recordId, req.userId);
+      return reply.send(
+        ok({
+          paidStatus: record.paid_status,
+          lockedLayers: lockedLayers(record.paid_status === 1),
+          order: order ? orderPublic(order) : null,
+        }),
+      );
+    },
+  );
 }

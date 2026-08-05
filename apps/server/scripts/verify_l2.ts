@@ -7,6 +7,9 @@ import { runL2 } from '../src/modules/l2/l2.js';
 import { runL3 } from '../src/modules/l3/l3.js';
 import { runL4 } from '../src/modules/l4/l4.js';
 
+/** 固定"当前年份"保证测试确定性（大运定位随年份变化） */
+const CURRENT_YEAR = 2026;
+
 const l1 = runL1({
   solarDate: '2002-11-29',
   solarTime: '20:40',
@@ -15,16 +18,34 @@ const l1 = runL1({
   cityName: '北京',
   timezoneOffset: 8,
 });
-const l2 = runL2(l1.timeCorrection.trueSolarClockTime, 'male', l1.normalized.timeKnown);
-const l2f = runL2(l1.timeCorrection.trueSolarClockTime, 'female', l1.normalized.timeKnown);
-const l2o = runL2(l1.timeCorrection.trueSolarClockTime, 'other', l1.normalized.timeKnown);
+const l2 = runL2(
+  l1.timeCorrection.trueSolarClockTime,
+  'male',
+  l1.normalized.timeKnown,
+  CURRENT_YEAR,
+);
+const l2f = runL2(
+  l1.timeCorrection.trueSolarClockTime,
+  'female',
+  l1.normalized.timeKnown,
+  CURRENT_YEAR,
+);
+const l2o = runL2(
+  l1.timeCorrection.trueSolarClockTime,
+  'other',
+  l1.normalized.timeKnown,
+  CURRENT_YEAR,
+);
 const l3 = runL3(l2.bazi);
 const l4 = runL4(l2.bazi);
 
 const checks: Array<[string, boolean]> = [
   ['L2 双流派', l2.schools.length === 2],
   ['L2 日主辛/金', l2.bazi.dayMaster.gan === '辛' && l2.bazi.dayMaster.wuxing === '金'],
-  ['L2 当前大运甲寅2025-2034', l2.bazi.currentDaYun?.ganzhi === '甲寅' && l2.bazi.currentDaYun.startYear === 2025],
+  [
+    'L2 当前大运甲寅2025-2034',
+    l2.bazi.currentDaYun?.ganzhi === '甲寅' && l2.bazi.currentDaYun.startYear === 2025,
+  ],
   ['L2 男命顺排(首步壬子)', l2.bazi.daYun[0].ganzhi === '壬子'],
   ['L2 女命逆排(首步庚戌)', l2f.bazi.daYun[0].ganzhi === '庚戌'],
   ['L2 阴阳顺逆方向不同', l2.bazi.daYun[0].ganzhi !== l2f.bazi.daYun[0].ganzhi],
@@ -32,8 +53,16 @@ const checks: Array<[string, boolean]> = [
   ['L2 冲突溯源存在', l2.conflicts.length > 0],
   ['L3 五维人格', l3.personality.length === 5],
   ['L3 祛魅声明存在', l3.disenchantNote.includes('文化隐喻')],
-  ['L3 人格维度 0-100 且末位宜人性>=60', l3.personality.every((p) => p.score >= 0 && p.score <= 100) && l3.personality[4].score >= 60],
-  ['L4 权重30/20/50', l4.weightModel.xiantian === 0.3 && l4.weightModel.liunian === 0.2 && l4.weightModel.renwei === 0.5],
+  [
+    'L3 人格维度 0-100 且末位宜人性>=60',
+    l3.personality.every((p) => p.score >= 0 && p.score <= 100) && l3.personality[4].score >= 60,
+  ],
+  [
+    'L4 权重30/20/50',
+    l4.weightModel.xiantian === 0.3 &&
+      l4.weightModel.liunian === 0.2 &&
+      l4.weightModel.renwei === 0.5,
+  ],
   ['L4 六维评分', l4.dimensions.length === 6],
   ['L4 事业总分68', l4.dimensions.find((d) => d.key === 'career')?.total === 68],
   ['L4 结论强调人为主导', l4.summary.includes('人为')],

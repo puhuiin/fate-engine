@@ -25,15 +25,7 @@ export const LAYER_META = [
 ] as const;
 
 export type LayerData =
-  | L1Output
-  | L2Output
-  | L3Output
-  | L4Output
-  | L5Output
-  | L6Output
-  | L7Output
-  | L8Output
-  | L9Output;
+  L1Output | L2Output | L3Output | L4Output | L5Output | L6Output | L7Output | L8Output | L9Output;
 
 export interface NineLayerReportItem {
   layer: number;

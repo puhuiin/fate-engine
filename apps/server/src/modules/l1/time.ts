@@ -5,8 +5,6 @@
  *   均时差（Spencer/NOAA 近似，精度 ±1 分钟内，对时辰判定足够）
  */
 
-const DEG2RAD = Math.PI / 180;
-
 /** 年积日（1-366） */
 export function dayOfYear(date: Date): number {
   const start = Date.UTC(date.getUTCFullYear(), 0, 0);
@@ -62,7 +60,9 @@ export function computeTrueSolarTime(
   const trueSolarInstant = utcTime.getTime() + (longitude / 15) * 3600_000 + eot * 60_000;
   const trueSolarDate = new Date(trueSolarInstant);
   const trueSolarHours = normalizeHours(
-    trueSolarDate.getUTCHours() + trueSolarDate.getUTCMinutes() / 60 + trueSolarDate.getUTCSeconds() / 3600,
+    trueSolarDate.getUTCHours() +
+      trueSolarDate.getUTCMinutes() / 60 +
+      trueSolarDate.getUTCSeconds() / 3600,
   );
 
   const utcHours =

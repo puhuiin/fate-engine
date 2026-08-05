@@ -23,6 +23,8 @@ export const phoneLoginSchema = z.object({
   phone: z.string().regex(/^1\d{10}$/, '手机号格式不正确'),
   code: z.string().min(4).max(8),
   nickname: z.string().trim().min(1).max(30).optional(),
+  /** 游客 token：登录成功后把该游客账号的档案/测算记录迁移到手机号账号（一次性合并） */
+  mergeGuestToken: z.string().max(1024).optional(),
 });
 
 export const sendSmsSchema = z.object({
@@ -33,6 +35,13 @@ export const sendSmsSchema = z.object({
 export const guestSchema = z.object({
   nickname: z.string().trim().min(1).max(30).optional(),
 });
+
+/** 个人资料编辑（当前支持昵称修改） */
+export const profileUpdateSchema = z
+  .object({
+    nickname: z.string().trim().min(1).max(30),
+  })
+  .refine((d) => d.nickname !== undefined, '没有可更新的字段');
 
 export const archiveCreateSchema = z.object({
   gender: z.enum(['male', 'female', 'other']).nullable().optional(),
@@ -59,4 +68,55 @@ export const archiveUpdateSchema = archiveCreateSchema.partial();
 export const calculateSchema = z.object({
   archiveId: z.number().int().positive(),
   calcType: z.enum(['standard', 'quantum', 'ultimate']).default('standard'),
+});
+
+/** 创建解锁订单 */
+export const orderCreateSchema = z.object({
+  recordId: z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]),
+});
+
+/** 数值参数容错 clamp：非有限数降级为 fallback，有限数截断到 [min, max] 并取整（与既有 API 容错语义一致） */
+function clampParam(v: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(n)));
+}
+
+/** 测算记录列表查询：分页（容错 clamp）+ 深度模式筛选（可选） */
+export const recordsQuerySchema = z.object({
+  page: z
+    .union([z.number(), z.string()])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : clampParam(v, 1, 100000, 1))),
+  pageSize: z
+    .union([z.number(), z.string()])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : clampParam(v, 1, 50, 10))),
+  calcType: z.enum(['standard', 'quantum', 'ultimate']).optional(),
+});
+
+/** 支付订单 */
+export const orderPaySchema = z.object({
+  channel: z.enum(['mock', 'wechat', 'alipay']).default('mock'),
+});
+
+/** 改运计划打卡更新 */
+export const planPatchSchema = z
+  .object({
+    status: z.enum(['done', 'pending']).optional(),
+    note: z.string().trim().max(200).optional(),
+  })
+  .refine((d) => d.status !== undefined || d.note !== undefined, '没有可更新的字段');
+
+/** 内核规则迭代记录 */
+export const kernelLogSchema = z.object({
+  version: z.string().trim().min(1).max(20),
+  ruleName: z.string().trim().min(1).max(50),
+  ruleDetail: z.string().trim().max(500).default(''),
+  note: z.string().trim().max(200).default(''),
+});
+
+/** 内核日志查询 */
+export const kernelQuerySchema = z.object({
+  version: z.string().trim().max(20).optional(),
 });

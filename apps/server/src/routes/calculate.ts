@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { fail, ok, parseId } from '../lib/util.js';
-import { calculateSchema } from '../schema.js';
-import type { Db } from '../db/client.js';
-import { requireAuth } from './auth.js';
+import { ok } from '../lib/util.js';
+import { ApiError } from '../lib/errors.js';
+import { assertSchema, requireIdParam } from '../lib/http.js';
+import { calculateSchema, recordsQuerySchema } from '../schema.js';
+import type { Repos } from '../db/repo/index.js';
 import { runL1 } from '../modules/l1/l1.js';
 import type { TimePrecision, SourceReliability } from '../modules/l1/rating.js';
 import { runL2 } from '../modules/l2/l2.js';
@@ -11,8 +12,8 @@ import { runL4 } from '../modules/l4/l4.js';
 import { runL5 } from '../modules/l5/l5.js';
 import { runL6 } from '../modules/l6/l6.js';
 import { runL7 } from '../modules/l7/l7.js';
-import { runL8, insertLuckPlans } from '../modules/l8/l8.js';
-import { insertRiskItems } from '../modules/l6/risk.js';
+import { runL8, toPlanRows } from '../modules/l8/l8.js';
+import { toRiskRows } from '../modules/l6/risk.js';
 import { runL9 } from '../modules/l9/l9.js';
 import { buildNineLayerReport, maskPaidLayers, maskRawReport, lockedLayers } from '../report.js';
 
@@ -29,19 +30,13 @@ interface ArchiveRow {
   source_reliability?: string;
 }
 
-export function calculateRoutes(app: FastifyInstance, db: Db): void {
+export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   /** 触发测算：阶段1 仅执行 L1 时空校正，返回九层报告结构 */
-  app.post('/api/v1/calculate', { preHandler: requireAuth }, async (req, reply) => {
-    const parsed = calculateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.send(fail(400, parsed.error.issues[0]?.message ?? '参数错误'));
-    }
-    const { archiveId, calcType } = parsed.data;
-    const archive = db
-      .prepare('SELECT * FROM user_birth_archive WHERE id = ? AND user_id = ?')
-      .get(archiveId, req.userId) as ArchiveRow | undefined;
+  app.post('/api/v1/calculate', { preHandler: app.authenticate }, async (req, reply) => {
+    const { archiveId, calcType } = assertSchema(calculateSchema, req.body);
+    const archive = repos.archives.findByUserIdAndId<ArchiveRow>(archiveId, req.userId);
     if (!archive) {
-      return reply.send(fail(404, '档案不存在或无权访问'));
+      throw new ApiError(404, '档案不存在或无权访问');
     }
 
     let l1: ReturnType<typeof runL1>;
@@ -65,35 +60,33 @@ export function calculateRoutes(app: FastifyInstance, db: Db): void {
         timezoneOffset: archive.timezone_offset ?? 8,
       });
 
-      l2 = runL2(l1.timeCorrection.trueSolarClockTime, archive.gender ?? 'other', l1.normalized.timeKnown);
+      l2 = runL2(
+        l1.timeCorrection.trueSolarClockTime,
+        archive.gender ?? 'other',
+        l1.normalized.timeKnown,
+      );
       l3 = runL3(l2.bazi);
       l4 = runL4(l2.bazi);
       l5 = runL5(l2.bazi);
-      l6 = runL6(l2.bazi, l4, l5);
+      l6 = runL6(l2.bazi, l4, l5, calcType);
       l7 = runL7(l1, l2, l4, l5);
       l8 = runL8(l4, l5, l2.bazi);
       l9 = runL9(l2.bazi, l4, l5, l7);
     } catch (e) {
-      return reply.send(fail(400, e instanceof Error ? e.message : '出生信息不合法，请重新编辑档案'));
+      throw new ApiError(400, e instanceof Error ? e.message : '出生信息不合法，请重新编辑档案');
     }
 
     const report = buildNineLayerReport(l1, l2, l3, l4, l5, l6, l7, l8, l9);
 
-    const tx = db.transaction(() => {
-      const info = db
-        .prepare(
-          'INSERT INTO calculate_record (archive_id, user_id, calc_type, raw_json, status) VALUES (?, ?, ?, ?, ?)',
-        )
-        .run(
-          archiveId,
-          req.userId,
-          calcType,
-          JSON.stringify({ l1, l2, l3, l4, l5, l6, l7, l8, l9 }),
-          'completed',
-        );
-      const recordId = Number(info.lastInsertRowid);
-      insertLuckPlans(db, recordId, l8);
-      insertRiskItems(db, recordId, l5, l6);
+    const tx = repos.db.transaction(() => {
+      const recordId = repos.records.insert(
+        archiveId,
+        req.userId,
+        calcType,
+        JSON.stringify({ l1, l2, l3, l4, l5, l6, l7, l8, l9 }),
+      );
+      repos.plans.insertBatch(recordId, toPlanRows(l8));
+      repos.risks.insertBatch(recordId, toRiskRows(l5, l6));
       return recordId;
     });
     const recordId = tx();
@@ -113,16 +106,14 @@ export function calculateRoutes(app: FastifyInstance, db: Db): void {
   });
 
   /** 读取测算记录（仅本人） */
-  app.get('/api/v1/records/:id', { preHandler: requireAuth }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
-    const record = db
-      .prepare('SELECT * FROM calculate_record WHERE id = ? AND user_id = ?')
-      .get(id, req.userId) as (Record<string, unknown> & { raw_json: string | null }) | undefined;
+  app.get('/api/v1/records/:id', { preHandler: app.authenticate }, async (req) => {
+    const id = requireIdParam(req, 'id');
+    const record = repos.records.findById<Record<string, unknown> & { raw_json: string | null }>(
+      id,
+      req.userId,
+    );
     if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
+      throw new ApiError(404, '记录不存在或无权访问');
     }
     const raw = record.raw_json;
     let parsed: unknown = null;
@@ -149,16 +140,11 @@ export function calculateRoutes(app: FastifyInstance, db: Db): void {
   });
 
   /** 某记录的已知风险项清单（仅本人）：L5/L6 属付费层，未解锁仅返回 locked 标记 */
-  app.get('/api/v1/records/:id/risks', { preHandler: requireAuth }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
-    const record = db
-      .prepare('SELECT id, paid_status FROM calculate_record WHERE id = ? AND user_id = ?')
-      .get(id, req.userId) as { id: number; paid_status: number } | undefined;
+  app.get('/api/v1/records/:id/risks', { preHandler: app.authenticate }, async (req, reply) => {
+    const id = requireIdParam(req, 'id');
+    const record = repos.records.findMetaById(id, req.userId);
     if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
+      throw new ApiError(404, '记录不存在或无权访问');
     }
     if (record.paid_status !== 1) {
       return reply.send(
@@ -168,68 +154,36 @@ export function calculateRoutes(app: FastifyInstance, db: Db): void {
         ),
       );
     }
-    const rows = db
-      .prepare(
-        `SELECT * FROM risk_item WHERE record_id = ?
-         ORDER BY risk_level DESC, id ASC`,
-      )
-      .all(id);
+    const rows = repos.risks.listByRecord(id);
     return ok({ risks: rows, total: rows.length, locked: false });
   });
 
-  /** 测算历史列表（可选分页：page/pageSize，缺省时返回全部保持兼容） */
-  app.get('/api/v1/records', { preHandler: requireAuth }, async (req, reply) => {
-    const query = req.query as { page?: string; pageSize?: string };
-    const clampInt = (v: unknown, fallback: number, max: number): number => {
-      const n = Number(v);
-      if (!Number.isFinite(n)) return fallback;
-      return Math.min(max, Math.max(1, Math.floor(n)));
-    };
-    const page = clampInt(query.page, 1, 100000);
-    const pageSize = clampInt(query.pageSize, 10, 50);
-    const paginate = query.page !== undefined || query.pageSize !== undefined;
-    const base = `FROM calculate_record r JOIN user_birth_archive a ON r.archive_id = a.id AND a.user_id = r.user_id
-                  WHERE r.user_id = ?`;
-    const total = (db.prepare(`SELECT COUNT(*) AS n ${base}`).get(req.userId) as { n: number }).n;
-    if (!paginate) {
-      const rows = db
-        .prepare(
-          `SELECT r.id, r.archive_id, r.calc_type, r.status, r.paid_status, r.created_at,
-                  a.solar_date, a.solar_time, a.city_name
-           ${base} ORDER BY r.created_at DESC`,
-        )
-        .all(req.userId);
+  /** 测算历史列表（可选分页 page/pageSize 与深度模式 calcType 筛选） */
+  app.get('/api/v1/records', { preHandler: app.authenticate }, async (req) => {
+    const { page, pageSize, calcType } = assertSchema(recordsQuerySchema, req.query ?? {});
+    const currentPage = page ?? 1;
+    const currentSize = pageSize ?? 10;
+    if (page === undefined && pageSize === undefined && calcType === undefined) {
+      const rows = repos.records.listAllByUser(req.userId);
       return ok(rows);
     }
-    const rows = db
-      .prepare(
-        `SELECT r.id, r.archive_id, r.calc_type, r.status, r.paid_status, r.created_at,
-                a.solar_date, a.solar_time, a.city_name
-         ${base} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
-      )
-      .all(req.userId, pageSize, (page - 1) * pageSize);
-    return ok({ list: rows, total, page, pageSize });
+    const { rows, total } = repos.records.listByUser(
+      req.userId,
+      currentPage,
+      currentSize,
+      calcType,
+    );
+    return ok({ list: rows, total, page: currentPage, pageSize: currentSize, calcType });
   });
 
   /** 删除测算记录（仅本人）：级联清理改运方案、风险项与订单 */
-  app.delete('/api/v1/records/:id', { preHandler: requireAuth }, async (req, reply) => {
-    const id = parseId((req.params as { id: string }).id);
-    if (!id) {
-      return reply.send(fail(400, '参数 id 不合法'));
-    }
-    const record = db
-      .prepare('SELECT id FROM calculate_record WHERE id = ? AND user_id = ?')
-      .get(id, req.userId);
+  app.delete('/api/v1/records/:id', { preHandler: app.authenticate }, async (req, reply) => {
+    const id = requireIdParam(req, 'id');
+    const record = repos.records.findMetaById(id, req.userId);
     if (!record) {
-      return reply.send(fail(404, '记录不存在或无权访问'));
+      throw new ApiError(404, '记录不存在或无权访问');
     }
-    const tx = db.transaction(() => {
-      db.prepare('DELETE FROM luck_plan WHERE record_id = ?').run(id);
-      db.prepare('DELETE FROM risk_item WHERE record_id = ?').run(id);
-      db.prepare('DELETE FROM order_pay WHERE record_id = ?').run(id);
-      db.prepare('DELETE FROM calculate_record WHERE id = ?').run(id);
-    });
-    tx();
+    repos.records.deleteCascade(id);
     return reply.send(ok({ removed: true }, '记录已删除'));
   });
 }

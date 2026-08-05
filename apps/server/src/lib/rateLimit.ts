@@ -11,6 +11,7 @@ export interface RateLimitOptions {
  * 进程内 IP 维度滑动窗口限流，返回 onRequest 钩子。
  * 自研实现（零第三方依赖）：每 IP 仅保留窗口内时间戳，超限直接 429。
  * 单进程部署适用；多实例需外置存储（Redis 等）做共享桶。
+ * 响应携带标准限流头：X-RateLimit-Limit / X-RateLimit-Remaining，超限时附 Retry-After。
  */
 export function createRateLimitHook({ max, windowMs }: RateLimitOptions) {
   const buckets = new Map<string, number[]>();
@@ -25,6 +26,8 @@ export function createRateLimitHook({ max, windowMs }: RateLimitOptions) {
     const ts = buckets.get(ip);
     if (!ts) {
       buckets.set(ip, [now]);
+      reply.header('X-RateLimit-Limit', max);
+      reply.header('X-RateLimit-Remaining', max - 1);
       return;
     }
 
@@ -34,11 +37,16 @@ export function createRateLimitHook({ max, windowMs }: RateLimitOptions) {
     const live = i > 0 ? ts.slice(i) : ts;
 
     if (live.length >= max) {
+      reply.header('X-RateLimit-Limit', max);
+      reply.header('X-RateLimit-Remaining', 0);
+      reply.header('Retry-After', Math.ceil(windowMs / 1000));
       reply.code(429).send(fail(429, '请求过于频繁，请稍后再试'));
       return;
     }
     live.push(now);
     buckets.set(ip, live);
+    reply.header('X-RateLimit-Limit', max);
+    reply.header('X-RateLimit-Remaining', max - live.length);
 
     // 周期性全量清理（每 5 分钟），防冷门 IP 桶长期滞留内存
     if (now - lastSweep > sweepInterval) {

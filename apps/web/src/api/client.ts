@@ -14,6 +14,34 @@ export const AUTH_CHANGED_EVENT = 'fate:auth-changed';
 /** 请求超时（毫秒），防止网络挂起导致界面无限 loading */
 const REQUEST_TIMEOUT = 15000;
 
+/** 幂等请求（GET/HEAD）网络失败自动重试次数（不计首次）；非幂等请求不重试，避免重复提交 */
+const RETRY_MAX = 2;
+const RETRY_BASE_MS = 400;
+
+async function fetchWithRetry(
+  path: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  let attempt = 0;
+  const maxAttempts =
+    !init.method || init.method === 'GET' || init.method === 'HEAD' ? RETRY_MAX + 1 : 1;
+  while (true) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(path, { ...init, signal: ctrl.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      attempt += 1;
+      if (attempt >= maxAttempts) throw err;
+      await new Promise((r) => setTimeout(r, RETRY_BASE_MS * 2 ** (attempt - 1)));
+    }
+  }
+}
+
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) || '';
 }
@@ -30,24 +58,23 @@ export function clearToken(): void {
 
 async function request<T>(path: string, options?: RequestInit): Promise<ApiResp<T>> {
   const token = getToken();
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT);
   let res: Response;
   try {
-    res = await fetch(path, {
-      method: options?.method,
-      body: options?.body,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options?.headers ?? {}),
+    res = await fetchWithRetry(
+      path,
+      {
+        method: options?.method,
+        body: options?.body,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(options?.headers ?? {}),
+        },
       },
-      signal: ctrl.signal,
-    });
+      REQUEST_TIMEOUT,
+    );
   } catch {
     throw new Error('网络请求超时或失败，请稍后重试');
-  } finally {
-    clearTimeout(timer);
   }
   const ct = res.headers.get('content-type') || '';
   if (!ct.includes('application/json')) {
@@ -222,7 +249,14 @@ export interface L8Result {
 }
 
 export interface L6Result {
-  lines: Array<{ key: string; name: string; strategy: string; fit: number; trigger: string; risk: string }>;
+  lines: Array<{
+    key: string;
+    name: string;
+    strategy: string;
+    fit: number;
+    trigger: string;
+    risk: string;
+  }>;
   branchPoints: Array<{
     age: number;
     year: number;
@@ -232,6 +266,7 @@ export interface L6Result {
     decisionB: string;
     pathB: string;
   }>;
+  depthWindows?: Array<{ line: string; windows: string[] }>;
   note: string;
 }
 
@@ -264,6 +299,31 @@ export interface ReportItem {
   note: string | null;
 }
 
+/** 测算记录详情（GET /api/v1/records/:id） */
+export interface RecordDetail {
+  id: number;
+  archive_id: number;
+  calc_type: string;
+  status: string;
+  created_at: string;
+  report: ReportData;
+  paidStatus: number;
+  dataError: boolean;
+}
+
+/** 测算记录列表项（GET /api/v1/records） */
+export interface RecordListItem {
+  id: number;
+  archive_id: number;
+  calc_type: string;
+  status: string;
+  paid_status: number;
+  created_at: string;
+  solar_date: string;
+  solar_time: string | null;
+  city_name: string | null;
+}
+
 export function guestLogin(nickname?: string): Promise<ApiResp<{ user: User; token: string }>> {
   return request('/api/v1/auth/guest', { method: 'POST', body: JSON.stringify({ nickname }) });
 }
@@ -277,18 +337,45 @@ export function sendSmsCode(
   });
 }
 
+export interface PhoneLoginResp {
+  user: User;
+  token: string;
+  merged?: { archives: number; records: number };
+}
+
 export function phoneLogin(
   phone: string,
   code: string,
-): Promise<ApiResp<{ user: User; token: string }>> {
+  mergeGuestToken?: string,
+): Promise<ApiResp<PhoneLoginResp>> {
   return request('/api/v1/auth/phone', {
     method: 'POST',
-    body: JSON.stringify({ phone, code }),
+    body: JSON.stringify({ phone, code, ...(mergeGuestToken ? { mergeGuestToken } : {}) }),
   });
 }
 
 export function getMe(): Promise<ApiResp<User | null>> {
   return request('/api/v1/auth/me');
+}
+
+export function updateProfile(body: { nickname: string }): Promise<ApiResp<User | null>> {
+  return request('/api/v1/auth/profile', { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+export interface StatsOverview {
+  archivesCount: number;
+  totalRecords: number;
+  paidRecords: number;
+  unlockRate: number;
+  totalPlans: number;
+  donePlans: number;
+  planCompletionRate: number;
+  highRiskCount: number;
+  lastRecordAt: string | null;
+}
+
+export function getStatsOverview(): Promise<ApiResp<StatsOverview>> {
+  return request('/api/v1/stats/overview');
 }
 
 export function searchCities(q: string): Promise<ApiResp<City[]>> {
@@ -303,7 +390,10 @@ export function getArchive(id: number): Promise<ApiResp<Archive>> {
   return request(`/api/v1/archives/${id}`);
 }
 
-export function updateArchive(id: number, body: Record<string, unknown>): Promise<ApiResp<Archive>> {
+export function updateArchive(
+  id: number,
+  body: Record<string, unknown>,
+): Promise<ApiResp<Archive>> {
   return request(`/api/v1/archives/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 }
 
@@ -329,14 +419,12 @@ export function calculate(
   });
 }
 
-export function getRecord(
-  id: number,
-): Promise<ApiResp<Record<string, unknown> & { report: ReportData; paidStatus?: number }>> {
+export function getRecord(id: number): Promise<ApiResp<RecordDetail>> {
   return request(`/api/v1/records/${id}`);
 }
 
 export interface RecordsPage {
-  list: Array<Record<string, unknown>>;
+  list: RecordListItem[];
   total: number;
   page: number;
   pageSize: number;
@@ -345,7 +433,7 @@ export interface RecordsPage {
 export function listRecords(
   page?: number,
   pageSize?: number,
-): Promise<ApiResp<Array<Record<string, unknown>> | RecordsPage>> {
+): Promise<ApiResp<RecordListItem[] | RecordsPage>> {
   const qs =
     page !== undefined && pageSize !== undefined ? `?page=${page}&pageSize=${pageSize}` : '';
   return request(`/api/v1/records${qs}`);
@@ -357,6 +445,16 @@ export interface OrderInfo {
   amount_cents: number;
   entitlement_status: string;
   created_at: string;
+}
+
+export interface OrderRecord extends OrderInfo {
+  record_id: number | null;
+  calc_type: string | null;
+  record_paid_status: number | null;
+}
+
+export function listOrders(): Promise<ApiResp<OrderRecord[]>> {
+  return request('/api/v1/orders');
 }
 
 export interface UnlockOrderResp {
@@ -379,6 +477,10 @@ export function payOrder(
     method: 'POST',
     body: JSON.stringify({ channel }),
   });
+}
+
+export function cancelOrder(orderId: number): Promise<ApiResp<OrderInfo>> {
+  return request(`/api/v1/orders/${orderId}/cancel`, { method: 'POST' });
 }
 
 export interface PlanItem {

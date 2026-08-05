@@ -8,6 +8,62 @@
   --line: #e6dfcf;
 }
 
+/* 骨架屏 */
+.skeleton {
+  display: inline-block;
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #ece5d2 25%, #f7f1e0 37%, #ece5d2 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.skeleton-block {
+  padding: 22px 24px;
+}
+
+.skeleton-table {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 12px;
+}
+
+.skeleton-row {
+  display: flex;
+  gap: 12px;
+}
+
+.skeleton-row .skeleton {
+  flex: 1;
+}
+
+.skeleton-row .skeleton:first-child {
+  flex: 0 0 32%;
+}
+
+.skeleton-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0 16px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -219,6 +275,118 @@ body {
   cursor: not-allowed;
 }
 
+/* 使用概览统计条 */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin: 16px 0;
+  padding: 14px 12px;
+  background: #faf4e4;
+  border: 1px solid #e8dcc0;
+  border-radius: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.stat-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--gold);
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #8a7b5c;
+}
+
+/* 测算模式选择 */
+.calc-type-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.calc-type {
+  border: 1px solid #e0d4b6;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #fff;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.calc-type input {
+  position: absolute;
+  opacity: 0;
+}
+
+.calc-type strong {
+  font-size: 14px;
+  color: #5a4a26;
+}
+
+.calc-type span {
+  font-size: 12px;
+  color: #8a7b5c;
+  line-height: 1.4;
+}
+
+.calc-type.selected {
+  border-color: var(--gold);
+  background: #faf4e4;
+}
+
+@media (max-width: 560px) {
+  .calc-type-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 测算模式徽标 */
+.calc-badge {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.calc-badge.quantum {
+  background: #6c5ce7;
+  color: #fff;
+}
+
+.calc-badge.ultimate {
+  background: #b8860b;
+  color: #fff;
+}
+
+/* 昵称内联编辑 */
+.nick-input {
+  border: 1px solid #d8cba6;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 14px;
+  margin-right: 6px;
+  width: 140px;
+}
+
+@media (max-width: 560px) {
+  .stats-bar {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 .link-btn {
   background: none;
   border: none;
@@ -356,6 +524,28 @@ table.kv .link-btn:first-child {
 .pill-pending {
   background: #f0efe9;
   color: #8a8577;
+}
+
+/* 订单状态徽标 */
+.order-status.granted {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.order-status.expired {
+  background: #f0efe9;
+  color: #8a8577;
+  text-decoration: line-through;
+}
+
+.order-status.pending {
+  background: #fff3e0;
+  color: #b26a00;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
 }
 
 table.kv {
@@ -802,6 +992,41 @@ table.kv td.renwei {
 .unlock-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* 支付渠道选择 */
+.pay-channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pay-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
+  color: #55503f;
+  cursor: pointer;
+  background: #fffdf7;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.pay-channel input {
+  position: absolute;
+  opacity: 0;
+}
+
+.pay-channel.selected {
+  border-color: var(--gold);
+  background: #faf4e4;
+  color: #8a6d0b;
+  font-weight: 600;
 }
 
 .lock-card {

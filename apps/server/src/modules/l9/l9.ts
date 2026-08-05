@@ -21,12 +21,7 @@ export interface L9Output {
   finalNote: string;
 }
 
-export function runL9(
-  bazi: BaziResult,
-  l4: L4Output,
-  l5: L5Output,
-  l7: L7Output,
-): L9Output {
+export function runL9(bazi: BaziResult, _l4: L4Output, l5: L5Output, _l7: L7Output): L9Output {
   const dominantWx = Object.entries(bazi.wuxingCount).sort((a, b) => b[1] - a[1])[0][0];
   const wxTheme: Record<string, string> = {
     木: '生长与创造——把成长本身当作目的，方向会自然浮现。',
@@ -36,7 +31,6 @@ export function runL9(
     水: '洞察与流动——用敏锐看见趋势，用灵活适应变化。',
   };
   const nextDaYun = bazi.daYun.find((d) => d.index > (bazi.currentDaYun?.index ?? 0));
-  const bestRenwei = [...l4.dimensions].sort((a, b) => b.renwei - a.renwei)[0];
 
   const lifeLessons: LifeLesson[] = [
     {

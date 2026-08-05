@@ -21,3 +21,9 @@ apps/server/data/
 .vscode/
 apps/web/vite.config.js
 apps/web/vite.config.d.ts
+
+# Docker
+apps/server/data/
+
+# CI workflow（本地模板就绪；推送需具备 workflow scope 的 token，故不纳入版本控制）
+.github/workflows/
