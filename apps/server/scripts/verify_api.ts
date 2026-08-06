@@ -5,7 +5,7 @@
  */
 import { createDb } from '../src/db/client.js';
 import { buildApp } from '../src/app.js';
-import { decompress } from '../src/lib/compress.js';
+import { decompress, decompressBrotli } from '../src/lib/compress.js';
 import { createRepos } from '../src/db/repo/index.js';
 import { startOrderExpiryTask } from '../src/jobs/expireOrders.js';
 import { runDataCleanup } from '../src/jobs/dataCleanup.js';
@@ -885,6 +885,15 @@ check(
 );
 const gzNoAcc = await gzApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
 check('gzip：未声明 accept-encoding 不压缩', gzNoAcc.headers['content-encoding'] === undefined);
+// 14.7b 响应 brotli 压缩：客户端声明 br 时优先于 gzip
+const brHit = await gzApp.inject({
+  method: 'GET',
+  url: `/api/v1/records/${gzRecId}`,
+  headers: { authorization: `Bearer ${gzToken}`, 'accept-encoding': 'gzip, br' },
+});
+check('brotli：声明 br 优先返回 content-encoding: br', brHit.headers['content-encoding'] === 'br');
+const brJson = JSON.parse(await decompressBrotli(Buffer.from(brHit.rawPayload))) as { code: number };
+check('brotli：解压后 JSON 完整可解析', brJson.code === 200);
 gzDb.close();
 
 // ---------- 15. trustProxy：反向代理后按真实客户端 IP 限流分桶 ----------
