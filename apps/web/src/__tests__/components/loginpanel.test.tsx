@@ -10,12 +10,7 @@ vi.mock('../../api/client', () => ({
   updateProfile: vi.fn(),
 }));
 
-import {
-  phoneLogin,
-  sendSmsCode,
-  setToken,
-  updateProfile,
-} from '../../api/client';
+import { phoneLogin, sendSmsCode, setToken, updateProfile } from '../../api/client';
 import type { User } from '../../api/client';
 
 const mocked = {
