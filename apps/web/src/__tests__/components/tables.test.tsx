@@ -8,6 +8,9 @@ import StatsBar from '../../components/StatsBar';
 import type { RecordListItem } from '../../api/client';
 import type { Archive } from '../../api/client';
 
+// 与 main.tsx 一致，预先启用 v7 行为开关，消除测试运行时的 React Router 弃用警告
+const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true };
+
 describe('RecordsTable 测算历史表格', () => {
   it('空记录显示占位文案', () => {
     render(<RecordsTable records={[]} onDelete={() => {}} />);
@@ -29,7 +32,7 @@ describe('RecordsTable 测算历史表格', () => {
       },
     ];
     render(
-      <MemoryRouter>
+      <MemoryRouter future={ROUTER_FUTURE_FLAGS}>
         <RecordsTable records={records} onDelete={() => {}} />
       </MemoryRouter>,
     );
@@ -55,7 +58,7 @@ describe('RecordsTable 测算历史表格', () => {
       },
     ];
     render(
-      <MemoryRouter>
+      <MemoryRouter future={ROUTER_FUTURE_FLAGS}>
         <RecordsTable records={records} onDelete={() => {}} />
       </MemoryRouter>,
     );
@@ -80,7 +83,7 @@ describe('RecordsTable 测算历史表格', () => {
     ];
     const onDelete = vi.fn();
     render(
-      <MemoryRouter>
+      <MemoryRouter future={ROUTER_FUTURE_FLAGS}>
         <RecordsTable records={records} onDelete={onDelete} />
       </MemoryRouter>,
     );
@@ -116,7 +119,7 @@ describe('ArchivesTable 出生档案表格', () => {
     const onCalc = vi.fn();
     const onDelete = vi.fn();
     render(
-      <MemoryRouter>
+      <MemoryRouter future={ROUTER_FUTURE_FLAGS}>
         <ArchivesTable archives={archives} onCalc={onCalc} onDelete={onDelete} />
       </MemoryRouter>,
     );
