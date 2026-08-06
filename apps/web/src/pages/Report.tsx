@@ -269,7 +269,7 @@ export default function Report() {
             </ul>
             {!unlocked && (
               <p className="dim">
-                解锁深度报告后，这里会补充「卡点 / 综合结论 / 核心要义」等关键结论。
+                解锁深度报告后，这里会补充「多线 / 卡点 / 综合结论 / 核心要义」等关键结论。
               </p>
             )}
             <p className="dim plain-disclaimer">

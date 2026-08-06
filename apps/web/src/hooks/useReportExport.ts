@@ -54,18 +54,21 @@ export function useReportExport() {
     recordId: number;
   }) => {
     const { data, unlocked, risks, recordId } = input;
-    const text = buildExportText({
-      l1: data.l1,
-      l2: data.l2,
-      l3: data.l3,
-      l4: unlocked ? data.l4 : null,
-      l5: unlocked ? data.l5 : null,
-      l6: unlocked ? data.l6 : null,
-      l7: unlocked ? data.l7 : null,
-      l8: unlocked ? data.l8 : null,
-      l9: unlocked ? data.l9 : null,
-      risks,
-    });
+    const text = buildExportText(
+      {
+        l1: data.l1,
+        l2: data.l2,
+        l3: data.l3,
+        l4: unlocked ? data.l4 : null,
+        l5: unlocked ? data.l5 : null,
+        l6: unlocked ? data.l6 : null,
+        l7: unlocked ? data.l7 : null,
+        l8: unlocked ? data.l8 : null,
+        l9: unlocked ? data.l9 : null,
+        risks,
+      },
+      { unlocked },
+    );
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
