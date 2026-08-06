@@ -42,6 +42,9 @@ export function buildExportText(r: ExportInput): string {
     personality: r.l3?.personality,
     strengths: r.l3?.strengths,
     growth: r.l3?.growth,
+    lines: r.l6?.lines
+      ? r.l6.lines.map((l) => ({ name: l.name, fit: l.fit, strategy: l.strategy }))
+      : undefined,
     mainKnot: r.l5?.mainKnot,
     synthesis: r.l7?.synthesis,
     essence: r.l9?.essence,

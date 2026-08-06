@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildExportText, fmtHour } from '../pages/report/exportText';
-import type { L1Result, L4Result, L8Result, RiskItem } from '../api/client';
+import type { L1Result, L4Result, L6Result, L8Result, RiskItem } from '../api/client';
 
 const l1 = {
   normalized: {
@@ -160,5 +160,30 @@ describe('buildExportText 报告导出', () => {
     });
     expect(text).toContain('【风险提示】');
     expect(text).toContain('Lv4/5（2031）：换轨期｜应对：分批落地');
+  });
+
+  it('导读段包含 L6 多线概览（与页面导读一致）', () => {
+    const text = buildExportText({
+      l1: null,
+      l2: null,
+      l3: null,
+      l4: null,
+      l5: null,
+      l6: {
+        lines: [
+          { name: '修行', fit: 100, strategy: '向内求索' },
+          { name: '事业', fit: 61, strategy: '稳扎稳打' },
+        ],
+        branchPoints: [],
+        note: '',
+      } as unknown as L6Result,
+      l7: null,
+      l8: null,
+      l9: null,
+      risks: [],
+    });
+    expect(text).toContain('【先看这里：三分钟读懂报告】');
+    expect(text).toContain('【多线】四条命运线的契合参考');
+    expect(text).toContain('修行（契合 100）：向内求索');
   });
 });
