@@ -1292,6 +1292,35 @@ check(
 );
 clDb.close();
 
+// ─── 生产启动守卫（config.ts 导入期强校验）───
+// 用子进程以 NODE_ENV=production 直接执行 config.ts，断言三态：
+// 未设置 / 长度不足 → 拒绝启动；显式长密钥 → 正常加载。
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const tsxCli = require.resolve('tsx/cli');
+const configEntry = path.resolve('src/config.ts');
+function runConfigEnv(env: Record<string, string>): { status: number; stderr: string } {
+  const cleanEnv = { ...process.env };
+  delete cleanEnv.FATE_SECRET;
+  Object.assign(cleanEnv, { NODE_ENV: 'production' }, env);
+  const r = spawnSync(process.execPath, [tsxCli, configEntry], { env: cleanEnv, encoding: 'utf8' });
+  return { status: r.status ?? -1, stderr: r.stderr ?? '' };
+}
+{
+  const noSecret = runConfigEnv({});
+  check('生产未设置 FATE_SECRET 拒绝启动（exit 1）', noSecret.status === 1);
+  check('生产未设置 FATE_SECRET 提示必须设置', noSecret.stderr.includes('必须设置 FATE_SECRET'));
+
+  const shortSecret = runConfigEnv({ FATE_SECRET: 'short-secret-16chars' });
+  check('生产 FATE_SECRET 长度不足 32 拒绝启动（exit 1）', shortSecret.status === 1);
+  check('生产 FATE_SECRET 长度不足提示 ≥32', shortSecret.stderr.includes('≥ 32'));
+
+  const okSecret = runConfigEnv({ FATE_SECRET: 'v'.repeat(40) });
+  check('生产 FATE_SECRET ≥32 正常加载（exit 0）', okSecret.status === 0);
+}
+
 db.close();
 
 if (failed > 0) {

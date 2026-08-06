@@ -38,6 +38,17 @@ if (!parsedEnv.success) {
 }
 const env = parsedEnv.data;
 
+// 生产环境强制私密源：缺省 FATE_SECRET 是公开的本地开发值，
+// 生产若未显式配置，攻击者可据此伪造任意用户 token，启动即拒绝。
+if (env.NODE_ENV === 'production' && !env.FATE_SECRET) {
+  console.error('[fate] 生产环境必须设置 FATE_SECRET（随机长串），已拒绝启动');
+  process.exit(1);
+}
+if (env.NODE_ENV === 'production' && (env.FATE_SECRET?.length ?? 0) < 32) {
+  console.error('[fate] 生产环境 FATE_SECRET 长度需 ≥ 32 字符，已拒绝启动');
+  process.exit(1);
+}
+
 export const config = {
   /** 运行环境：development | production */
   env: env.NODE_ENV || 'development',

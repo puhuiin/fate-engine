@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useReportData } from '../hooks/useReportData';
 import { useReportExport } from '../hooks/useReportExport';
 import { Skeleton, SkeletonCard, SkeletonRows } from '../components/Skeleton';
-import { LAYER_NAMES, MODULE_HINT } from '../layers';
+import { LAYER_NAMES, MODULE_HINT, calcTypeDesc } from '../layers';
 import {
   Layer1,
   Layer2,
@@ -222,7 +222,7 @@ export default function Report() {
         <p className="hint">
           九层输出结构（PRD 规格）。基础层免费，深度层（L4-L9）付费解锁
           {unlocked ? '，当前已解锁全量报告。' : '。'}
-          <span className={`pill calc-badge ${calcType}`}>
+          <span className={`pill calc-badge ${calcType}`} title={calcTypeDesc(calcType)}>
             {calcType === 'quantum'
               ? '量子展开'
               : calcType === 'ultimate'
@@ -269,7 +269,7 @@ export default function Report() {
             </ul>
             {!unlocked && (
               <p className="dim">
-                解锁深度报告后，这里会补充「卡点 / 综合结论 / 核心要义」等关键结论。
+                解锁深度报告后，这里会补充「多线 / 卡点 / 综合结论 / 核心要义」等关键结论。
               </p>
             )}
             <p className="dim plain-disclaimer">

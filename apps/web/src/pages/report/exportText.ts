@@ -32,8 +32,16 @@ export interface ExportInput {
   risks: RiskItem[];
 }
 
+/** 未解锁时追加的深度层标注：让复制文本的用户知道付费层存在，而非误以为报告仅此而已 */
+export const LOCKED_EXPORT_NOTICE = [
+  '',
+  '【深度层未解锁】',
+  '本报告仅含免费层：L1 时空校正 / L2 术数算力 / L3 科学祛魅。',
+  '付费深度层 L4-L9（六维落地、因果溯源、命运线、综合结论、改运方案、课题总结）需解锁后重新导出。',
+].join('\n');
+
 /** 导出完整报告为纯文本（仅已解锁层，调用方负责传 null 遮罩） */
-export function buildExportText(r: ExportInput): string {
+export function buildExportText(r: ExportInput, opts: { unlocked?: boolean } = {}): string {
   const lines: string[] = [];
   lines.push('全域超验 · 命运演算 报告', '='.repeat(30));
 
@@ -146,5 +154,6 @@ export function buildExportText(r: ExportInput): string {
     lines.push('', `核心要义：${r.l9.essence}`, `箴言：${r.l9.mantra}`, '', r.l9.finalNote);
   }
   lines.push('', '='.repeat(30), '仅供文化娱乐与自我观察参考。');
+  if (opts.unlocked === false) lines.push(LOCKED_EXPORT_NOTICE);
   return lines.join('\n');
 }

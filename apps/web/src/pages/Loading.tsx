@@ -17,20 +17,19 @@ export default function Loading() {
     if (!state) return;
     const total = LAYER_SKELETON.length;
     const interval = setInterval(() => {
-      setDoneCount((n) => {
-        if (n + 1 >= total) {
-          clearInterval(interval);
-          setTimeout(() => navigate(`/report/${state.recordId}`, { replace: true }), 300);
-        }
-        return n + 1;
-      });
+      // updater 保持纯函数：只做数值推进，不在此调度导航/清理定时器
+      setDoneCount((n) => (n >= total ? n : n + 1));
     }, 220);
-    // StrictMode 下 effect 会 setup→cleanup→setup 双跑：
-    // cleanup 清掉旧 interval，第二次 setup 重新开启动画，避免计时器叠加或动画停滞
-    return () => {
-      clearInterval(interval);
-    };
-  }, [navigate, state]);
+    return () => clearInterval(interval);
+  }, [state]);
+
+  // 动画贯通后延迟跳转：独立 effect 持有导航定时器，cleanup 清理，
+  // 组件卸载或依赖变化时不会残留一个「跳转到报告页」的悬挂定时器。
+  useEffect(() => {
+    if (!state || doneCount < LAYER_SKELETON.length) return;
+    const t = setTimeout(() => navigate(`/report/${state.recordId}`, { replace: true }), 300);
+    return () => clearTimeout(t);
+  }, [doneCount, state, navigate]);
 
   if (!state) {
     return (

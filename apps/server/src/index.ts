@@ -9,13 +9,9 @@ const PORT = config.port;
 const HOST = config.host;
 
 /**
- * 签名密钥强校验：生产环境必须显式提供 FATE_SECRET，
- * 否则拒绝启动（硬编码开发密钥仅限本地开发，生产泄漏会导致 token 可伪造）。
+ * 生产环境签名密钥强校验已在 config.ts 导入期完成（未设置或长度 <32 字符即拒绝启动），
+ * 此处无需重复守卫。仅对本地开发保留密钥来源提示，避免误以为已配置密钥。
  */
-if (config.env === 'production' && !process.env.FATE_SECRET) {
-  console.error('[fate] 生产环境必须设置 FATE_SECRET 环境变量，已拒绝启动。');
-  process.exit(1);
-}
 if (!process.env.FATE_SECRET) {
   console.warn('[fate] 警告：未设置 FATE_SECRET，token/签名使用开发默认密钥，仅限本地开发。');
 }

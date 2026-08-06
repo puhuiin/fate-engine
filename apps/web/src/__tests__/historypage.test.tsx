@@ -158,8 +158,9 @@ describe('History 页面集成', () => {
     expect(screen.getByText(/1991-03-03/)).toBeInTheDocument();
     expect(screen.getByText('F202608010001')).toBeInTheDocument();
     expect(screen.getByText('F202608010002')).toBeInTheDocument();
-    // 待支付订单显示取消按钮，已解锁订单不显示
+    // 待支付订单显示取消按钮与去支付入口，已解锁订单不显示
     expect(screen.getAllByRole('button', { name: '取消订单' })).toHaveLength(1);
+    expect(screen.getByRole('link', { name: '去支付' })).toHaveAttribute('href', '/report/11');
     expect(screen.getByText('待支付')).toBeInTheDocument();
     expect(screen.getByText('已解锁')).toBeInTheDocument();
     expect(screen.getAllByText('¥99.00')).toHaveLength(2);

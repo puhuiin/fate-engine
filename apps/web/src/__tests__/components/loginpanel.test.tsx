@@ -7,16 +7,18 @@ vi.mock('../../api/client', () => ({
   phoneLogin: vi.fn(),
   sendSmsCode: vi.fn(),
   setToken: vi.fn(),
+  clearToken: vi.fn(),
   updateProfile: vi.fn(),
 }));
 
-import { phoneLogin, sendSmsCode, setToken, updateProfile } from '../../api/client';
+import { phoneLogin, sendSmsCode, setToken, clearToken, updateProfile } from '../../api/client';
 import type { User } from '../../api/client';
 
 const mocked = {
   phoneLogin: vi.mocked(phoneLogin),
   sendSmsCode: vi.mocked(sendSmsCode),
   setToken: vi.mocked(setToken),
+  clearToken: vi.mocked(clearToken),
   updateProfile: vi.mocked(updateProfile),
 };
 
@@ -147,5 +149,13 @@ describe('LoginPanel 登录面板', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     expect(mocked.updateProfile).toHaveBeenCalledWith({ nickname: '新昵称' });
     await waitFor(() => expect(onLogin).toHaveBeenCalled());
+  });
+
+  it('退出登录清除本地 token 并回调刷新', () => {
+    const onLogin = vi.fn();
+    render(<LoginPanel me={mePhone} onLogin={onLogin} />);
+    fireEvent.click(screen.getByRole('button', { name: '退出登录' }));
+    expect(mocked.clearToken).toHaveBeenCalled();
+    expect(onLogin).toHaveBeenCalled();
   });
 });
