@@ -26,3 +26,17 @@ export const MODULE_HINT = [
 
 /** Loading 页演算进度用的固定九层骨架（不依赖后端返回的大对象） */
 export const LAYER_SKELETON = LAYER_NAMES.map((name, i) => ({ layer: i + 1, name }));
+
+/** 测算方式元数据：Input 页三态选择器与 Report 页 badge 共用同一描述（防口径漂移） */
+export const CALC_TYPE_META = [
+  { value: 'standard', label: '标准测算', desc: '九层全量报告 + 3 个关键分叉点' },
+  { value: 'quantum', label: '量子展开', desc: '分叉点展开至 5 个，附各行运窗口' },
+  { value: 'ultimate', label: '终极演算', desc: '全生命周期分叉点 + 完整行运窗口' },
+] as const;
+
+export type CalcType = (typeof CALC_TYPE_META)[number]['value'];
+
+/** 按 value 取描述（Report badge 悬停提示用），未知值返回空 */
+export function calcTypeDesc(value: string): string {
+  return CALC_TYPE_META.find((c) => c.value === value)?.desc ?? '';
+}

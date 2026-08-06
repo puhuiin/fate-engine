@@ -22,7 +22,7 @@ vi.mock('../pages/History', () => ({
 }));
 
 import { getMe, AUTH_CHANGED_EVENT, TOAST_EVENT } from '../api/client';
-import type { User } from '../api/client';
+import type { ApiResp, User } from '../api/client';
 
 const mockedGetMe = vi.mocked(getMe);
 
@@ -136,8 +136,8 @@ describe('App 路由与应用外壳', () => {
   it('在途 getMe 乱序返回不覆盖最新登录态', async () => {
     localStorage.setItem('fate_token', 't');
     // 首次挂载：慢请求（旧用户），响应延迟返回
-    let resolveOld!: (v: ReturnType<typeof user>) => void;
-    const oldPromise = new Promise<ReturnType<typeof user>>((r) => {
+    let resolveOld!: (v: ApiResp<User | null>) => void;
+    const oldPromise = new Promise<ApiResp<User | null>>((r) => {
       resolveOld = r;
     });
     mockedGetMe
@@ -157,7 +157,13 @@ describe('App 路由与应用外壳', () => {
 
     // 首次慢请求此时才返回旧昵称：不得覆盖最新登录态
     await act(async () => {
-      resolveOld(user({ nickname: '旧昵称' }));
+      resolveOld({
+        code: 200,
+        msg: 'ok',
+        data: user({ nickname: '旧昵称' }),
+        timestamp: 0,
+        sign: '',
+      });
     });
     expect(screen.getByText('新昵称')).toBeInTheDocument();
     expect(screen.queryByText('旧昵称')).not.toBeInTheDocument();

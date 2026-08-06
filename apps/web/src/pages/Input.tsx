@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Skeleton } from '../components/Skeleton';
+import { CALC_TYPE_META } from '../layers';
 import {
   calculate,
   createArchive,
@@ -30,24 +31,6 @@ const GENDERS = [
   { value: 'male', label: '男' },
   { value: 'female', label: '女' },
   { value: 'other', label: '其他/保密' },
-];
-
-const CALC_TYPES = [
-  {
-    value: 'standard',
-    label: '标准测算',
-    desc: '九层全量报告 + 3 个关键分叉点',
-  },
-  {
-    value: 'quantum',
-    label: '量子展开',
-    desc: '分叉点展开至 5 个，附各行运窗口',
-  },
-  {
-    value: 'ultimate',
-    label: '终极演算',
-    desc: '全生命周期分叉点 + 完整行运窗口',
-  },
 ];
 
 const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
@@ -256,7 +239,7 @@ export default function Input() {
       <div className="field">
         <span>测算模式</span>
         <div className="calc-type-row">
-          {CALC_TYPES.map((c) => (
+          {CALC_TYPE_META.map((c) => (
             <label key={c.value} className={`calc-type ${calcType === c.value ? 'selected' : ''}`}>
               <input
                 type="radio"
