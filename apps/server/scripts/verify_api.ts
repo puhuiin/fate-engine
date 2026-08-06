@@ -9,6 +9,7 @@ import { decompress, decompressBrotli } from '../src/lib/compress.js';
 import { createRepos } from '../src/db/repo/index.js';
 import { startOrderExpiryTask } from '../src/jobs/expireOrders.js';
 import { runDataCleanup } from '../src/jobs/dataCleanup.js';
+import { config } from '../src/config.js';
 import type { FastifyInstance } from 'fastify';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -489,6 +490,23 @@ check(
 );
 const unUsed = count('sms_code', "phone = '13812345678' AND used = 0");
 check('重发后历史未用验证码作废（仅 1 个有效码）', unUsed === 1);
+
+// ---------- 9a2. 单手机号每日发送上限（SMS_DAILY_MAX=10，防短信轰炸） ----------
+// 预插 10 条已用记录占满当日额度，再发送应被拒绝；used=1 不触发 60 秒重发窗口
+const limitPhone = '13777778888';
+const insertSms = db.prepare(
+  "INSERT INTO sms_code (phone, code, expires_at, used, channel) VALUES (?, '000000', datetime('now', '+10 minutes'), 1, 'login')",
+);
+for (let i = 0; i < config.smsDailyMax; i++) insertSms.run(limitPhone);
+const smsOverDaily = await call('POST', '/api/v1/auth/sms/send', {
+  body: { phone: limitPhone, channel: 'login' },
+});
+check(
+  '单手机号 24 小时内发送上限（10 条）后拒绝发送',
+  smsOverDaily.status === 429 &&
+    smsOverDaily.json.code === 429 &&
+    String(smsOverDaily.json.msg).includes('已达上限'),
+);
 
 // ---------- 9b. 验证码暴力枚举防护：5 次错误后作废 ----------
 const sms2 = await call('POST', '/api/v1/auth/sms/send', {
