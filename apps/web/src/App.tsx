@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { NavLink, Route, Routes, Link, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AUTH_CHANGED_EVENT, TOAST_EVENT, getMe } from './api/client';
@@ -21,6 +21,9 @@ export default function App() {
   const [user, setUser] = useState<{ phone_masked: string | null; nickname: string } | null>(null);
   const [toast, setToast] = useState('');
   const location = useLocation();
+  // 用户信息请求序号：登录/登出/昵称变更等事件并发触发 refresh 时，仅接受最新一次响应，
+  // 避免在途的旧 getMe 响应（乱序返回）把已登出的用户态或旧昵称覆盖回去。
+  const userSeq = useRef(0);
 
   // 路由切换回到顶部，避免长页面（报告/历史）间跳转停留在旧滚动位置
   useEffect(() => {
@@ -29,17 +32,26 @@ export default function App() {
 
   useEffect(() => {
     const refresh = () => {
+      const seq = ++userSeq.current;
       if (!localStorage.getItem('fate_token')) {
         setUser(null);
         return;
       }
       getMe()
-        .then((res) => setUser(res.data))
-        .catch(() => setUser(null));
+        .then((res) => {
+          if (seq === userSeq.current) setUser(res.data);
+        })
+        .catch(() => {
+          if (seq === userSeq.current) setUser(null);
+        });
     };
     refresh();
     window.addEventListener(AUTH_CHANGED_EVENT, refresh);
-    return () => window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
+    return () => {
+      // 组件卸载后自增序号，让在途响应失效，避免卸载后 setState
+      userSeq.current += 1;
+      window.removeEventListener(AUTH_CHANGED_EVENT, refresh);
+    };
   }, []);
 
   // 全局 toast：api 层 401 等全局性消息经 TOAST_EVENT 通知，非阻塞展示后自动消失

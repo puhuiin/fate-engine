@@ -133,6 +133,36 @@ describe('App 路由与应用外壳', () => {
     expect(mockedGetMe).toHaveBeenCalledTimes(2);
   });
 
+  it('在途 getMe 乱序返回不覆盖最新登录态', async () => {
+    localStorage.setItem('fate_token', 't');
+    // 首次挂载：慢请求（旧用户），响应延迟返回
+    let resolveOld!: (v: ReturnType<typeof user>) => void;
+    const oldPromise = new Promise<ReturnType<typeof user>>((r) => {
+      resolveOld = r;
+    });
+    mockedGetMe
+      .mockReturnValueOnce(oldPromise)
+      .mockResolvedValueOnce({
+        code: 200,
+        msg: 'ok',
+        data: user({ nickname: '新昵称' }),
+        timestamp: 0,
+        sign: '',
+      });
+
+    renderApp();
+    // AUTH_CHANGED 触发第二次 refresh，先返回新昵称
+    window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+    await screen.findByText('新昵称');
+
+    // 首次慢请求此时才返回旧昵称：不得覆盖最新登录态
+    await act(async () => {
+      resolveOld(user({ nickname: '旧昵称' }));
+    });
+    expect(screen.getByText('新昵称')).toBeInTheDocument();
+    expect(screen.queryByText('旧昵称')).not.toBeInTheDocument();
+  });
+
   it('TOAST_EVENT 展示全局 toast 后自动消失', async () => {
     vi.useFakeTimers();
     try {
