@@ -296,7 +296,7 @@ export default function Report() {
         <div
           key={l.layer}
           id={`layer-${l.layer}`}
-          className={`card layer-card ${l.ready ? 'ready' : 'pending'}`}
+          className={`card layer-card ${l.ready ? 'ready' : 'pending'} ${l.locked ? 'layer-locked' : ''}`}
         >
           <div className="layer-head">
             <span className="layer-badge">L{l.layer}</span>

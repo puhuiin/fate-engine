@@ -1252,20 +1252,63 @@ table.kv td.renwei {
   }
 }
 
-/* 打印报告：隐藏导航与按钮 */
+/* 打印报告：隐藏导航/支付/锁定层，纯黑白正文，避免装饰背景浪费墨 */
 @media print {
+  @page {
+    margin: 14mm;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 12pt;
+  }
+
   .topbar,
   .layer-nav,
   .export-btn,
   .report-foot,
   .lock-banner,
-  .unlock-btn {
+  .unlock-btn,
+  .pay-channels,
+  .lock-card,
+  .layer-locked {
     display: none !important;
   }
 
-  .card {
-    box-shadow: none;
+  /* 报告头部只保留标题，去掉提示文案与渠道选择 */
+  .report > .card > h2 + .hint {
+    display: none !important;
+  }
+
+  .card,
+  .layer-card,
+  .exec-summary {
+    box-shadow: none !important;
+    background: #fff !important;
+    border: 1px solid #ccc;
     break-inside: avoid;
+    border-radius: 0;
+    padding: 10mm 6mm;
+    margin-bottom: 8mm;
+  }
+
+  .exec-summary {
+    background: #fff !important;
+  }
+
+  .pill,
+  .calc-badge,
+  .layer-badge {
+    border: 1px solid #999;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  .point-tag {
+    border-color: #999;
+    color: #000 !important;
+    background: #fff !important;
   }
 }
 

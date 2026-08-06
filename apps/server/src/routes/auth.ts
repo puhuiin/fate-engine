@@ -103,7 +103,7 @@ export function authRoutes(
       // 游客数据迁移：登录成功后，将游客 token 对应账号的档案/测算记录/订单转入本账号。
       // 安全约束：仅接受类型位为 guest 的 token；目标账号必须是未绑定手机号的纯游客，
       // 防止借用任意登录用户 token 批量转移他人数据；合并完成后删除游客空壳账号使旧 token 失效。
-      // 事务保证一致性；无数据或已合并时静默返回 0。
+      // 事务在 users.mergeGuestInto 内保证一致性；无数据或已合并时静默返回 0。
       let mergedArchives = 0;
       let mergedRecords = 0;
       if (mergeGuestToken) {
@@ -114,21 +114,9 @@ export function authRoutes(
             'id, register_channel, phone',
           );
           if (target && target.register_channel === 'guest' && target.phone === null) {
-            const tx = repos.db.transaction(() => {
-              const arch = repos.db
-                .prepare('UPDATE user_birth_archive SET user_id = ? WHERE user_id = ?')
-                .run(user.id, guest.userId);
-              const rec = repos.db
-                .prepare('UPDATE calculate_record SET user_id = ? WHERE user_id = ?')
-                .run(user.id, guest.userId);
-              repos.db
-                .prepare('UPDATE order_pay SET user_id = ? WHERE user_id = ?')
-                .run(user.id, guest.userId);
-              mergedArchives = Number(arch.changes);
-              mergedRecords = Number(rec.changes);
-              repos.users.deleteById(guest.userId);
-            });
-            tx();
+            const merged = repos.users.mergeGuestInto(user.id, guest.userId);
+            mergedArchives = merged.archives;
+            mergedRecords = merged.records;
           }
         }
       }

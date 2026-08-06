@@ -18,7 +18,7 @@ import { statsRoutes } from './routes/stats.js';
 import { fail, ok } from './lib/util.js';
 import { authenticate } from './lib/auth.js';
 import { createRateLimitHook } from './lib/rateLimit.js';
-import { buildOpenApiDoc } from './lib/openapi.js';
+import { cachedOpenApiDoc } from './lib/openapi.js';
 import { registerCompression } from './lib/compress.js';
 import { searchCities } from './modules/l1/location.js';
 import { LAYER_META } from './report.js';
@@ -315,8 +315,8 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     };
   });
 
-  /** OpenAPI 契约：机器可读 API 文档，端点与 routes/ 同步登记 */
-  app.get('/api/openapi.json', async () => buildOpenApiDoc());
+  /** OpenAPI 契约：机器可读 API 文档（模块级惰性缓存，文档静态不变） */
+  app.get('/api/openapi.json', async () => cachedOpenApiDoc());
 
   /** L1 城市检索（前端录入页自动补全） */
   app.get('/api/v1/locations/search', async (req) => {

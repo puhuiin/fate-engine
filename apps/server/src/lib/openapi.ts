@@ -237,3 +237,11 @@ export function buildOpenApiDoc(): Record<string, unknown> {
     },
   };
 }
+
+/** 契约文档惰性缓存：文档为纯静态结构，避免每次请求重建（对象字面量较大） */
+let openApiCache: Record<string, unknown> | null = null;
+
+export function cachedOpenApiDoc(): Record<string, unknown> {
+  if (!openApiCache) openApiCache = buildOpenApiDoc();
+  return openApiCache;
+}
