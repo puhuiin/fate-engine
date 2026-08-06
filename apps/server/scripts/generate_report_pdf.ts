@@ -94,6 +94,9 @@ const KEY_LABEL: Record<string, string> = {
 
 const labelOf = (key: string): string => KEY_LABEL[key] ?? key;
 
+/** 这些字段的取值自带完整句读（如 L9 finalNote 以「声明：」开头），直接整行输出，避免「最终声明：声明：…」重复 */
+const RAW_LINE_KEYS = new Set(['finalNote']);
+
 /** 递归扁平化对象 → 行文本 */
 function flatten(obj: unknown, prefix: string, out: string[]): void {
   if (obj === null || obj === undefined) return;
@@ -109,6 +112,10 @@ function flatten(obj: unknown, prefix: string, out: string[]): void {
     if (entries.length === 0) return;
     for (const [k, v] of entries) {
       const key = prefix ? `${prefix} · ${labelOf(k)}` : labelOf(k);
+      if (RAW_LINE_KEYS.has(k)) {
+        out.push(String(v));
+        continue;
+      }
       if (typeof v === 'object') {
         if (Object.keys(v as object).length === 0) continue;
         flatten(v, key, out);

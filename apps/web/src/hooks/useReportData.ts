@@ -68,6 +68,7 @@ export function useReportData(recordId: number) {
         getPlans(recordId, { signal }),
         getRisks(recordId, { signal }),
       ]);
+      if (signal?.aborted) return;
       if (pl.data) setPlans(pl.data.plans);
       if (rk.data) setRisks(rk.data.risks);
     },
@@ -77,6 +78,8 @@ export function useReportData(recordId: number) {
   const reload = useCallback(
     async (signal?: AbortSignal) => {
       const res = await getRecord(recordId, { signal });
+      // 请求已返回但所属记录已被切换/卸载：丢弃结果，防止旧记录覆盖新记录
+      if (signal?.aborted) return;
       if (res.code !== 200) throw new Error(res.msg || '记录不存在或无权访问');
       if (res.data?.dataError) throw new Error('该记录报告数据异常，请返回记录列表重新测算');
       const r = res.data?.report;

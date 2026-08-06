@@ -88,6 +88,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<ApiResp<
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(options?.headers ?? {}),
         },
+        ...(options?.signal ? { signal: options.signal } : {}),
       },
       REQUEST_TIMEOUT,
     );
@@ -452,8 +453,12 @@ export interface RecordsPage {
   pageSize: number;
 }
 
-export function listRecords(page = 1, pageSize = 10): Promise<ApiResp<RecordsPage>> {
-  return request(`/api/v1/records?page=${page}&pageSize=${pageSize}`);
+export function listRecords(
+  page = 1,
+  pageSize = 10,
+  opts?: { signal?: AbortSignal },
+): Promise<ApiResp<RecordsPage>> {
+  return request(`/api/v1/records?page=${page}&pageSize=${pageSize}`, opts ?? {});
 }
 
 export interface OrderInfo {
