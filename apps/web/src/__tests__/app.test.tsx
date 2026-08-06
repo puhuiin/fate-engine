@@ -140,15 +140,13 @@ describe('App 路由与应用外壳', () => {
     const oldPromise = new Promise<ApiResp<User | null>>((r) => {
       resolveOld = r;
     });
-    mockedGetMe
-      .mockReturnValueOnce(oldPromise)
-      .mockResolvedValueOnce({
-        code: 200,
-        msg: 'ok',
-        data: user({ nickname: '新昵称' }),
-        timestamp: 0,
-        sign: '',
-      });
+    mockedGetMe.mockReturnValueOnce(oldPromise).mockResolvedValueOnce({
+      code: 200,
+      msg: 'ok',
+      data: user({ nickname: '新昵称' }),
+      timestamp: 0,
+      sign: '',
+    });
 
     renderApp();
     // AUTH_CHANGED 触发第二次 refresh，先返回新昵称

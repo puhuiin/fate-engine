@@ -188,7 +188,18 @@ describe('buildExportText 报告导出', () => {
   });
 
   it('未解锁时追加深度层标注，解锁后不追加', () => {
-    const input = { l1: null, l2: null, l3: null, l4: null, l5: null, l6: null, l7: null, l8: null, l9: null, risks: [] };
+    const input = {
+      l1: null,
+      l2: null,
+      l3: null,
+      l4: null,
+      l5: null,
+      l6: null,
+      l7: null,
+      l8: null,
+      l9: null,
+      risks: [],
+    };
     const locked = buildExportText(input, { unlocked: false });
     const unlockedText = buildExportText(input, { unlocked: true });
     const defaultText = buildExportText(input);
