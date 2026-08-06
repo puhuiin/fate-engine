@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import LoginPanel from '../../components/LoginPanel';
 
@@ -83,7 +83,7 @@ describe('LoginPanel 登录面板', () => {
     mocked.sendSmsCode.mockResolvedValueOnce({
       code: 429,
       msg: '发送太频繁',
-      data: null,
+      data: { sent: false },
       timestamp: 0,
       sign: '',
     });
@@ -120,7 +120,7 @@ describe('LoginPanel 登录面板', () => {
     mocked.phoneLogin.mockResolvedValueOnce({
       code: 403,
       msg: '验证码错误',
-      data: null,
+      data: { user: mePhone, token: '' },
       timestamp: 0,
       sign: '',
     });
