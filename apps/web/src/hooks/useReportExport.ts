@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { buildExportText } from '../pages/report/layers';
 import { buildPlainGuide, type PlainPoint } from '../pages/report/plain';
-import type { L3Result, L5Result, L7Result, L9Result, RiskItem } from '../api/client';
+import type { L3Result, L5Result, L6Result, L7Result, L9Result, RiskItem } from '../api/client';
 import type { ReportDataState } from './useReportData';
 
 /**
@@ -22,6 +22,7 @@ export function useReportExport() {
     trueSolarHours?: number;
     l3: L3Result | null;
     l5: L5Result | null;
+    l6: L6Result | null;
     l7: L7Result | null;
     l9: L9Result | null;
     unlocked: boolean;
@@ -32,6 +33,10 @@ export function useReportExport() {
       personality: input.l3?.personality,
       strengths: input.l3?.strengths,
       growth: input.l3?.growth,
+      lines:
+        input.unlocked && input.l6?.lines
+          ? input.l6.lines.map((l) => ({ name: l.name, fit: l.fit, strategy: l.strategy }))
+          : undefined,
       mainKnot: input.unlocked ? input.l5?.mainKnot : undefined,
       synthesis: input.unlocked ? input.l7?.synthesis : undefined,
       essence: input.unlocked ? input.l9?.essence : undefined,

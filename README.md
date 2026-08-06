@@ -46,7 +46,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 6 组确定性回归脚本（44 + 10 + 18 + 47 + 156 + 5 = 280 断言）；前端 12 文件 82 用例（含 React 组件测试） |
+| 校验 | 6 组确定性回归脚本（44 + 10 + 18 + 47 + 158 + 5 = 282 断言，各脚本运行均输出断言总数可自动核对）；前端 12 文件 83 用例（含 React 组件测试） |
 
 ---
 
@@ -93,14 +93,14 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（280 断言）
+# 全量回归（282 断言）
 npm run verify -w @fate/server
 
 # 分块验证
 npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时/排盘子时边界（10 用例）
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆/历法边界（18 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（47 断言，含深度模式差异）
-npm run verify:api -w @fate/server  # 接口层（156 断言，内存 SQLite + inject，含取消订单/订单历史隔离/过期清理/模式筛选/静态缓存/OpenAPI）
+npm run verify:api -w @fate/server  # 接口层（158 断言，内存 SQLite + inject，含取消订单/订单历史隔离/中文错误消息/过期清理/模式筛选/静态缓存/OpenAPI）
 npm run verify:migrate -w @fate/server  # 迁移机制（5 断言：新库全量/幂等重跑/旧库补应用）
 
 # 前端测试（纯函数 + React 组件：表格渲染、错误边界、骨架屏）

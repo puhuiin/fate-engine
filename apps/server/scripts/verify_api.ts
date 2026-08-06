@@ -298,6 +298,10 @@ check(
   '非法支付渠道 400（白名单校验）',
   payBadChannel.status === 400 && payBadChannel.json.code === 400,
 );
+check(
+  '非法输入返回中文错误消息（zod 默认英文中文化）',
+  /[\u4e00-\u9fa5]/.test(payBadChannel.json.msg ?? ''),
+);
 
 const paidRec = await call('GET', `/api/v1/records/${record1}`, { token: tokenA });
 check('付费后记录 L4 完整可见', paidRec.status === 200 && paidRec.json.data?.report?.l4 != null);
@@ -1129,7 +1133,15 @@ check(
 const filterBadType = await call('GET', '/api/v1/records?calcType=quantum-extra', {
   token: tokenA,
 });
-check('非法 calcType 筛选 400', filterBadType.status === 400 && filterBadType.json.code === 400);
+check(
+  '非法 calcType 筛选 400',
+  filterBadType.status === 400 && filterBadType.json.code === 400,
+);
+check(
+  '非法枚举值错误消息为中文（不合法字段取值）',
+  /[\u4e00-\u9fa5]/.test(filterBadType.json.msg ?? '') &&
+    (filterBadType.json.msg ?? '').includes('不合法'),
+);
 
 // 订单历史列表：返回关联记录摘要且倒序；跨用户隔离（B 不可见 A 的订单）
 const orderListA = await call('GET', '/api/v1/orders', { token: tokenA });
