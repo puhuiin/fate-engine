@@ -44,4 +44,19 @@ describe('buildPlainGuide 白话导读构建', () => {
     expect(points[0].tag).toBe('提醒');
     expect(points[0].text).toContain('提前规划');
   });
+
+  it('多线概览按契合度降序输出策略', () => {
+    const lines = [
+      { name: '事业', fit: 61, strategy: '稳扎稳打' },
+      { name: '修行', fit: 100, strategy: '向内求索' },
+      { name: '家庭', fit: 61, strategy: '多沟通' },
+      { name: '健康', fit: 85, strategy: '规律作息' },
+    ];
+    const points = buildPlainGuide({ lines });
+    const multi = points.find((p) => p.tag === '多线');
+    expect(multi).toBeDefined();
+    expect(multi?.title).toContain('命运线');
+    expect((multi?.text.indexOf('修行') ?? 0)).toBeLessThan(multi?.text.indexOf('事业') ?? 0);
+    expect(multi?.text).toContain('向内求索');
+  });
 });

@@ -208,6 +208,7 @@ export default function Report() {
     trueSolarHours: data.l1 ? data.l1.timeCorrection.trueSolarHours : undefined,
     l3: data.l3,
     l5: data.l5,
+    l6: data.l6,
     l7: data.l7,
     l9: data.l9,
     unlocked,

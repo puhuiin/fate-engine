@@ -154,6 +154,7 @@ export default function Input() {
         cityName: city?.name,
         longitude: city?.longitude,
         latitude: city?.latitude,
+        timezoneOffset: city?.timezoneOffset,
       };
       const res = editId ? await updateArchive(editId, payload) : await createArchive(payload);
       if (res.code !== 200) {

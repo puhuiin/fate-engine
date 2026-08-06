@@ -56,6 +56,7 @@ const cases = [
 ];
 
 let failed = 0;
+let passed = 0;
 for (const c of cases) {
   const r = runL1({ timePrecision: 'minute', sourceReliability: 'certificate', ...c.input });
   const diff = Math.abs(r.timeCorrection.trueSolarHours - c.expect.trueSolarHours);
@@ -64,6 +65,7 @@ for (const c of cases) {
     r.shichen.name === c.expect.shichen &&
     r.lunar.dayGanZhi === c.expect.dayGanZhi;
   if (!ok) failed++;
+  passed++;
   console.log(
     `${ok ? 'PASS' : 'FAIL'}  ${c.name} → 真太阳时 ${r.timeCorrection.trueSolarHours.toFixed(2)}（期望 ${c.expect.trueSolarHours}±${c.tol}）${r.shichen.name} ${r.lunar.dayGanZhi}日`,
   );
@@ -81,6 +83,7 @@ const leap = runL1({
 const leapOk =
   Math.abs(leap.timeCorrection.trueSolarHours - 11.543) <= 0.02 && leap.lunar.dayGanZhi === '戊寅';
 if (!leapOk) failed++;
+passed++;
 console.log(
   `${leapOk ? 'PASS' : 'FAIL'}  闰年 2004-02-29 12:00 北京 → 真太阳时 ${leap.timeCorrection.trueSolarHours.toFixed(2)} 戊寅日`,
 );
@@ -95,6 +98,7 @@ const dst = runL1({
 });
 const dstOk = dst.dstAdjustment.applied && dst.dstAdjustment.adjusted === '1987-05-01 11:00';
 if (!dstOk) failed++;
+passed++;
 console.log(
   `${dstOk ? 'PASS' : 'FAIL'}  夏令时 1987-05-01 12:00 北京 → 校正 ${dst.dstAdjustment.original} → ${dst.dstAdjustment.adjusted}`,
 );
@@ -103,4 +107,4 @@ if (failed > 0) {
   console.error(`${failed} 个用例失败`);
   process.exit(1);
 }
-console.log('全部用例通过');
+console.log(`全部用例通过（${passed} 项断言）`);

@@ -77,6 +77,7 @@ export function buildPlainGuide(p: {
   personality?: Array<{ dimension: string; score: number; desc: string }>;
   strengths?: string[];
   growth?: string[];
+  lines?: Array<{ name: string; fit: number; strategy: string }>;
   mainKnot?: string;
   synthesis?: string[];
   essence?: string;
@@ -114,6 +115,18 @@ export function buildPlainGuide(p: {
       tag: '成长',
       title: '值得主动培养的方向',
       text: p.growth.slice(0, 3).join('；'),
+    });
+  }
+
+  if (p.lines && p.lines.length > 0) {
+    const byFit = [...p.lines].sort((a, b) => b.fit - a.fit);
+    points.push({
+      tag: '多线',
+      title: '四条命运线的契合参考',
+      text: byFit
+        .slice(0, 4)
+        .map((l) => `${l.name}（契合 ${l.fit}）：${l.strategy}`)
+        .join('；'),
     });
   }
 
