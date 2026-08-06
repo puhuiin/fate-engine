@@ -73,7 +73,7 @@ npm run dev
 | `PORT` | `3001` | 后端监听端口 |
 | `HOST` | `0.0.0.0` | 后端监听地址 |
 | `NODE_ENV` | `development` | 生产环境需设为 `production` |
-| `FATE_SECRET` | 开发内置密钥 | JWT/签名的唯一私密源，**生产环境必填，未设置将拒绝启动** |
+| `FATE_SECRET` | 开发内置密钥 | JWT/签名的唯一私密源，**生产环境必填（≥32 字符），未设置或过短将拒绝启动** |
 | `FATE_TOKEN_TTL_SECONDS` | `604800`（7 天） | token 有效期（秒） |
 | `FATE_ORDER_TTL_SECONDS` | `1800`（30 分钟） | 待支付订单有效期（秒），过期自动作废 |
 | `DB_PATH` | `<cwd>/data/fate.db` | SQLite 数据库文件路径 |
