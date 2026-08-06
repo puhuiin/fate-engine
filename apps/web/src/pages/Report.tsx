@@ -310,9 +310,14 @@ export default function Report() {
             <div className="lock-card">
               <strong>深度测算层已锁定</strong>
               <p>该层为付费深度内容，解锁后可查看完整解析与行动方案。</p>
-              {channelPicker}
-              {unlockError && <p className="error">{unlockError}</p>}
-              <button className="unlock-btn" onClick={() => unlock(channel)} disabled={unlocking}>
+              <button
+                className="unlock-btn"
+                onClick={() => {
+                  scrollTop();
+                  unlock(channel);
+                }}
+                disabled={unlocking}
+              >
                 {unlocking ? '处理中…' : '解锁该层'}
               </button>
             </div>

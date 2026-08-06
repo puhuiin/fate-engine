@@ -129,12 +129,14 @@ describe('Report 页面集成', () => {
   it('未解锁：展示解锁横幅与渠道选择，锁定 L4-L9', () => {
     renderReport();
     expect(screen.getByText(/深度报告解锁 ¥99/)).toBeInTheDocument();
-    // 解锁横幅 + 6 个锁定层各渲染一份渠道选择器
-    expect(screen.getAllByLabelText('支付渠道').length).toBeGreaterThanOrEqual(7);
+    // 渠道选择器仅在解锁横幅中出现（锁定层不再重复渲染支付 UI）
+    expect(screen.getAllByLabelText('支付渠道').length).toBe(1);
     expect(screen.getAllByRole('radio', { name: '微信支付' })[0]).toBeChecked();
     // 九层导航中 L4-L9 带锁定标记
     expect(screen.getAllByText(/🔒/).length).toBeGreaterThanOrEqual(6);
     expect(screen.getAllByText(/深度测算层已锁定/).length).toBeGreaterThanOrEqual(6);
+    // 锁定层仍保留独立解锁按钮（复用当前渠道）
+    expect(screen.getAllByRole('button', { name: '解锁该层' }).length).toBeGreaterThanOrEqual(6);
   });
 
   it('选择渠道后点击立即解锁，以所选渠道调用 unlock', () => {
@@ -155,7 +157,8 @@ describe('Report 页面集成', () => {
   it('解锁失败展示错误文案', () => {
     mockedData.mockReturnValue(reportState({ unlockError: '支付失败，请稍后重试' }));
     renderReport();
-    expect(screen.getAllByText('支付失败，请稍后重试').length).toBeGreaterThanOrEqual(7);
+    // 错误仅在解锁横幅中展示，锁定层不再重复
+    expect(screen.getAllByText('支付失败，请稍后重试').length).toBe(1);
   });
 
   it('已解锁：隐藏解锁横幅且锁定层解除', () => {
