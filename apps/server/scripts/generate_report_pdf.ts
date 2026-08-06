@@ -4,33 +4,53 @@
  * 用 pdfkit（全局安装）渲染为排版完整的中文 PDF。
  *
  * 运行：npx tsx scripts/generate_report_pdf.ts
- * 依赖：全局 npm 包 pdfkit；系统字体 /usr/share/fonts/truetype/wqy/wqy-zenhei.ttc
+ * 依赖：全局 npm 包 pdfkit；系统字体 /usr/share/fonts/truetype/wqy/wqy-zenhei-ext.ttf
+ *       （由 wqy-zenhei.ttc 用 fontTools 提取的 ttf，含 ASCII + 全量 CJK，避免缺字乱码）
  */
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { runL1 } from '../src/modules/l1/l1.js';
-import { runL2 } from '../src/modules/l2/l2.js';
-import { runL3 } from '../src/modules/l3/l3.js';
-import { runL4 } from '../src/modules/l4/l4.js';
-import { runL5 } from '../src/modules/l5/l5.js';
-import { runL6 } from '../src/modules/l6/l6.js';
-import { runL7 } from '../src/modules/l7/l7.js';
-import { runL8 } from '../src/modules/l8/l8.js';
-import { runL9 } from '../src/modules/l9/l9.js';
+import { runL1, type L1Output } from '../src/modules/l1/l1.js';
+import { runL2, type L2Output } from '../src/modules/l2/l2.js';
+import { runL3, type L3Output } from '../src/modules/l3/l3.js';
+import { runL4, type L4Output } from '../src/modules/l4/l4.js';
+import { runL5, type L5Output } from '../src/modules/l5/l5.js';
+import { runL6, type L6Output } from '../src/modules/l6/l6.js';
+import { runL7, type L7Output } from '../src/modules/l7/l7.js';
+import { runL8, type L8Output } from '../src/modules/l8/l8.js';
+import { runL9, type L9Output } from '../src/modules/l9/l9.js';
 import { buildNineLayerReport, type NineLayerReportItem } from '../src/report.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// pdfkit 不在项目依赖中，按「全局安装」约定从全局 node_modules 加载
 const require = createRequire(import.meta.url);
 const globalRoot = execSync('npm root -g').toString().trim();
 const PDFDocument = require(path.join(globalRoot, 'pdfkit'));
 
-const FONT = '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf';
+const FONT = '/usr/share/fonts/truetype/wqy/wqy-zenhei-ext.ttf';
 const FONT_BOLD = FONT;
 
-/** 测试案例（与 verify_all.ts 主用例一致） */
+const GOLD = '#b8860b';
+const GOLD_LIGHT = '#f7f3e7';
+const DARK = '#1a1a1a';
+const MID = '#333333';
+const GRAY = '#888888';
+
+const SOURCE_LABEL: Record<string, string> = {
+  certificate: '证件',
+  family: '家人转述',
+  estimate: '估算',
+  unknown: '未知',
+};
+
+/** L2 次级流派 data 字段的中文标签 */
+const SCHOOL_KEY_LABEL: Record<string, string> = {
+  yearNaYin: '年柱纳音',
+  dayNaYin: '日柱纳音',
+  dayNaYinWuXing: '日柱纳音五行',
+  profile: '性格画像',
+};
+
 const CASE = {
   solarDate: '2002-11-29',
   solarTime: '20:40',
@@ -42,147 +62,567 @@ const CASE = {
   currentYear: 2026,
 };
 
-/** 常见英文 key → 中文，让报告更易读 */
-const KEY_LABEL: Record<string, string> = {
-  normalized: '归一化输入',
-  location: '出生地点',
-  timeCorrection: '真太阳时校正',
-  shichen: '时辰归属',
-  lunar: '农历换算',
-  boundaryRisk: '边界风险',
-  dstAdjustment: '夏令时校正',
-  rating: '可信度评级',
-  schools: '流派测算结果',
-  conflicts: '流派冲突',
-  schoolNote: '流派口径说明',
-  dayPrecisionOnly: '仅日级精度',
-  bazi: '四柱八字',
-  disenchantNote: '祛魅声明',
-  personality: '人格画像',
-  strengths: '天赋优势',
-  growth: '成长方向',
-  behaviorLogic: '行为逻辑',
-  weightModel: '权重模型',
-  dimensions: '六维落地',
-  summary: '总结',
-  karmaPatterns: '执念模式',
-  mainKnot: '主卡点',
-  resolutionPath: '化解路径',
-  note: '说明',
-  lines: '平行命运线',
-  branchPoints: '分叉点',
-  depthWindows: '深度窗口',
-  metaRules: '元规则',
-  conflictResolution: '冲突裁定',
-  synthesis: '综合结论',
-  coreNote: '核心说明',
-  levels: '七级方案',
-  lifeLessons: '人生课题',
-  essence: '心性本质',
-  mantra: '正念箴言',
-  finalNote: '最终声明',
-  pillars: '四柱',
-  year: '年柱',
-  month: '月柱',
-  day: '日柱',
-  time: '时柱',
-  dayMaster: '日主',
-  ganzhi: '干支',
-  element: '五行',
-  daYun: '大运',
-};
+const availWidth = (doc: PDFKit.PDFDocument): number =>
+  doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-const labelOf = (key: string): string => KEY_LABEL[key] ?? key;
+// ---------------- 通用排版工具 ----------------
 
-/** 这些字段的取值自带完整句读（如 L9 finalNote 以「声明：」开头），直接整行输出，避免「最终声明：声明：…」重复 */
-const RAW_LINE_KEYS = new Set(['finalNote']);
-
-/** 递归扁平化对象 → 行文本 */
-function flatten(obj: unknown, prefix: string, out: string[]): void {
-  if (obj === null || obj === undefined) return;
-  if (typeof obj === 'object') {
-    if (Array.isArray(obj)) {
-      if (obj.length === 0) return;
-      obj.forEach((item, i) => flatten(item, `${prefix}[${i}]`, out));
-      return;
-    }
-    const entries = Object.entries(obj as Record<string, unknown>).filter(
-      ([, v]) => v !== null && v !== undefined,
-    );
-    if (entries.length === 0) return;
-    for (const [k, v] of entries) {
-      const key = prefix ? `${prefix} · ${labelOf(k)}` : labelOf(k);
-      if (RAW_LINE_KEYS.has(k)) {
-        out.push(String(v));
-        continue;
-      }
-      if (typeof v === 'object') {
-        if (Object.keys(v as object).length === 0) continue;
-        flatten(v, key, out);
-      } else {
-        out.push(`${key}：${formatLeaf(v)}`);
-      }
-    }
-    return;
-  }
-  out.push(`${prefix}：${formatLeaf(obj)}`);
-}
-
-function formatLeaf(v: unknown): string {
-  if (typeof v === 'boolean') return v ? '是' : '否';
-  if (typeof v === 'string') return v;
-  return String(v);
-}
-
-/** 绘制带页码的分页头部 */
 function ensureSpace(doc: PDFKit.PDFDocument, needed: number): void {
-  const y = doc.y;
   const pageBottom = doc.page.height - doc.page.margins.bottom - 40;
-  if (y + needed > pageBottom) doc.addPage();
+  if (doc.y + needed > pageBottom) doc.addPage();
 }
 
 function drawPageHeader(doc: PDFKit.PDFDocument, title: string): void {
-  ensureSpace(doc, 60);
+  ensureSpace(doc, 70);
   doc
-    .fillColor('#1a1a1a')
+    .fillColor(DARK)
     .fontSize(16)
     .font(FONT_BOLD)
     .text(title, doc.page.margins.left, doc.y, {
-      width: doc.page.width - doc.page.margins.left * 2,
+      width: availWidth(doc),
     });
   doc.moveDown(0.4);
   doc
-    .strokeColor('#c8a04a')
+    .strokeColor(GOLD)
     .lineWidth(1.5)
     .moveTo(doc.page.margins.left, doc.y)
     .lineTo(doc.page.width - doc.page.margins.right, doc.y)
     .stroke();
+  doc.moveDown(0.8);
+}
+
+/** 小节标题：金色竖条 + 标题文字 */
+function section(doc: PDFKit.PDFDocument, title: string): void {
+  ensureSpace(doc, 40);
+  doc
+    .fillColor(GOLD)
+    .rect(doc.page.margins.left, doc.y + 2, 3.5, 14)
+    .fill();
+  doc
+    .fillColor(DARK)
+    .fontSize(12.5)
+    .font(FONT_BOLD)
+    .text(title, doc.page.margins.left + 10, doc.y, { width: availWidth(doc) - 10 });
   doc.moveDown(0.6);
+}
+
+/** 键值行：金色标签 + 值 */
+function kv(doc: PDFKit.PDFDocument, label: string, value: string): void {
+  ensureSpace(doc, 20);
+  doc.font(FONT).fontSize(10);
+  const labelWidth = doc.widthOfString(label, { features: ['kern'] }) + 8;
+  doc.fillColor(GOLD).text(label, doc.page.margins.left + 14, doc.y, { width: labelWidth });
+  doc.fillColor(MID).text(value, doc.page.margins.left + 14 + labelWidth, doc.y, {
+    width: availWidth(doc) - 14 - labelWidth,
+  });
+  doc.moveDown(0.3);
+}
+
+/** 正文段落 */
+function para(doc: PDFKit.PDFDocument, text: string, indent = 14): void {
+  ensureSpace(doc, 20);
+  doc
+    .fillColor(MID)
+    .fontSize(10)
+    .font(FONT)
+    .text(text, doc.page.margins.left + indent, doc.y, {
+      width: availWidth(doc) - indent,
+    });
+  doc.moveDown(0.5);
+}
+
+/** 编号/圆点列表项 */
+function listItem(doc: PDFKit.PDFDocument, idx: number | null, text: string): void {
+  ensureSpace(doc, 20);
+  doc.font(FONT).fontSize(10);
+  const mark = idx === null ? '•' : `${idx}.`;
+  const markW = doc.widthOfString(mark) + 6;
+  doc.fillColor(GOLD).text(mark, doc.page.margins.left + 14, doc.y, { width: markW });
+  doc.fillColor(MID).text(text, doc.page.margins.left + 14 + markW, doc.y, {
+    width: availWidth(doc) - 14 - markW,
+  });
+  doc.moveDown(0.3);
+}
+
+/** 说明块：浅金底 + 左边框，整块输出 */
+function noteBlock(doc: PDFKit.PDFDocument, text: string, title?: string): void {
+  const h = doc.heightOfString(text, { width: availWidth(doc) - 40 }) + (title ? 26 : 12);
+  ensureSpace(doc, h);
+  const y0 = doc.y;
+  doc
+    .save()
+    .fillColor(GOLD_LIGHT)
+    .rect(doc.page.margins.left, y0, availWidth(doc), h)
+    .fill()
+    .restore();
+  doc.fillColor(GOLD).rect(doc.page.margins.left, y0, 3, h).fill();
+  doc.font(FONT).fontSize(9.5);
+  if (title) {
+    doc
+      .fillColor(DARK)
+      .font(FONT_BOLD)
+      .text(title, doc.page.margins.left + 14, y0 + 7, {
+        width: availWidth(doc) - 28,
+      });
+    doc
+      .font(FONT)
+      .fillColor(MID)
+      .text(text, doc.page.margins.left + 14, y0 + 7 + 18, {
+        width: availWidth(doc) - 28,
+      });
+  } else {
+    doc.fillColor(MID).text(text, doc.page.margins.left + 14, y0 + 6, {
+      width: availWidth(doc) - 28,
+    });
+  }
+  doc.y = y0 + h + 4;
+}
+
+/** 简易表格：headers/rows 等长，colWeights 和为 1；markRow 高亮行号（1 起） */
+function table(
+  doc: PDFKit.PDFDocument,
+  headers: string[],
+  rows: string[][],
+  colWeights: number[],
+  highlightRows: Set<number> = new Set(),
+): void {
+  const x0 = doc.page.margins.left;
+  const widths = colWeights.map((w) => availWidth(doc) * w);
+  const pad = 4;
+  const cellW = (c: number): number => widths[c] - pad * 2;
+  const measure = (t: string, w: number): number => doc.heightOfString(t, { width: w }) + pad * 2;
+
+  const computeRowH = (r: string[]): number => {
+    let h = 0;
+    r.forEach((c, i) => {
+      h = Math.max(h, measure(c, cellW(i)));
+    });
+    return h;
+  };
+
+  const headerH = computeRowH(headers);
+  const rowHeights = rows.map(computeRowH);
+
+  const drawRow = (cells: string[], y: number, header: boolean, highlight: boolean): number => {
+    const h = header ? headerH : rowHeights[0];
+    if (header) {
+      doc.fillColor(GOLD_LIGHT).rect(x0, y, availWidth(doc), h).fill();
+    } else if (highlight) {
+      doc.fillColor('#fbf6ea').rect(x0, y, availWidth(doc), h).fill();
+    }
+    cells.forEach((c, i) => {
+      const tx = x0 + widths.slice(0, i).reduce((a, b) => a + b, 0);
+      doc
+        .font(FONT)
+        .fontSize(9.5)
+        .fillColor(header ? DARK : MID)
+        .text(c, tx + pad, y + pad, { width: cellW(i) });
+    });
+    return h;
+  };
+
+  // 表头
+  ensureSpace(doc, headerH + 20);
+  const startY = doc.y;
+  doc
+    .fillColor(GOLD)
+    .rect(x0, startY - 3, availWidth(doc), 1.2)
+    .fill();
+  doc.y = startY;
+  drawRow(headers, doc.y, true, false);
+  doc.y += headerH;
+  doc
+    .fillColor(GOLD)
+    .rect(x0, doc.y - 1.5, availWidth(doc), 0.6)
+    .fill();
+
+  rows.forEach((row, ri) => {
+    const h = rowHeights[ri];
+    ensureSpace(doc, h + 10);
+    drawRow(row, doc.y, false, highlightRows.has(ri + 1));
+    doc.y += h;
+    doc
+      .fillColor('#d8d3c5')
+      .rect(x0, doc.y - 0.6, availWidth(doc), 0.4)
+      .fill();
+  });
+  doc.moveDown(0.8);
+}
+
+// ---------------- 各层渲染 ----------------
+
+function renderL1(doc: PDFKit.PDFDocument, d: L1Output): void {
+  section(doc, '归一化输入');
+  kv(doc, '公历生日', d.normalized.solarDate);
+  kv(doc, '出生时刻', d.normalized.solarTime);
+  kv(doc, '精度', d.normalized.timeKnown ? '分钟级' : '仅日级');
+  kv(doc, '来源', SOURCE_LABEL[d.normalized.sourceReliability] ?? d.normalized.sourceReliability);
+
+  section(doc, '出生地点');
+  kv(doc, '城市', `${d.location.cityName}（${d.location.province}）`);
+  kv(doc, '坐标', `东经 ${d.location.longitude}°，北纬 ${d.location.latitude}°`);
+  kv(doc, '时区', `UTC+${d.location.timezoneOffset}`);
+  if (d.location.resolvedFromCity) kv(doc, '解析方式', '按城市解析');
+  if (d.location.isDaylightSavingApplied) kv(doc, '夏令时', '已应用');
+
+  section(doc, '真太阳时校正');
+  const iso = (dt: Date): string => dt.toISOString().replace('T', ' ').slice(0, 19);
+  kv(doc, '钟表时间', iso(d.timeCorrection.clockTime));
+  kv(doc, 'UTC 时间', iso(d.timeCorrection.utcTime));
+  kv(doc, '平均太阳时', `${d.timeCorrection.meanSolarHours.toFixed(2)} 时`);
+  kv(doc, '均时差', `${d.timeCorrection.equationOfTimeMinutes.toFixed(2)} 分`);
+  kv(doc, '真太阳时', `${d.timeCorrection.trueSolarHours.toFixed(2)} 时`);
+  kv(doc, '经度校正', `${d.timeCorrection.offsetMinutes} 分`);
+  kv(doc, '综合偏移', `${d.timeCorrection.totalOffsetMinutes} 分`);
+  kv(doc, '校正后时刻', iso(d.timeCorrection.trueSolarClockTime));
+  kv(doc, '是否跨日', d.timeCorrection.crossDay ? '是' : '否');
+
+  section(doc, '时辰归属');
+  kv(doc, '时辰', `${d.shichen.name}（${d.shichen.start}-${d.shichen.end} 点）`);
+
+  section(doc, '农历换算');
+  kv(doc, '农历日期', d.lunar.lunarDate);
+  kv(
+    doc,
+    '四柱干支',
+    `${d.lunar.yearGanZhi}年 ${d.lunar.monthGanZhi}月 ${d.lunar.dayGanZhi}日 ${d.lunar.timeGanZhi}时`,
+  );
+  kv(doc, '生肖', `属${d.lunar.yearAnimal}`);
+  kv(doc, '节气', d.lunar.currentJieQi || '（两节之间）');
+  table(
+    doc,
+    ['近期节气', '名称', '时间'],
+    [
+      ['上一个', d.lunar.prevJieQi.name, d.lunar.prevJieQi.time],
+      ['下一个', d.lunar.nextJieQi.name, d.lunar.nextJieQi.time],
+    ],
+    [0.18, 0.25, 0.57],
+  );
+  para(doc, d.lunar.jieQiNote, 14);
+
+  if (d.boundaryRisk) {
+    noteBlock(doc, '本案例处于时辰边界，精度已按保守口径处理。', '边界风险');
+  }
+  section(doc, '夏令时校正');
+  kv(doc, '是否校正', d.dstAdjustment.applied ? '是' : '否');
+  if (d.dstAdjustment.original !== d.dstAdjustment.adjusted) {
+    kv(doc, '校正前后', `${d.dstAdjustment.original} → ${d.dstAdjustment.adjusted}`);
+  }
+  para(doc, d.dstAdjustment.note, 14);
+
+  section(doc, '置信度评级');
+  kv(doc, '等级', d.rating.grade);
+  kv(doc, '置信度', `${d.rating.confidence}%`);
+  noteBlock(doc, d.rating.message, '评级说明');
+}
+
+function renderL2(doc: PDFKit.PDFDocument, d: L2Output): void {
+  const primary = d.schools.find((s) => s.data && 'pillars' in s.data);
+  if (primary) {
+    const data = primary.data as {
+      pillars: Array<{
+        position: string;
+        ganzhi: string;
+        gan: string;
+        zhi: string;
+        wuxing: string;
+        nayin: string;
+        shishenGan: string;
+        shishenZhi: string;
+        hideGan: string;
+        dishi: string;
+      }>;
+      dayMaster: { gan: string; wuxing: string };
+      strength: string;
+      wuxingCount: Record<string, number>;
+      shishenStats: Array<{ name: string; count: number }>;
+      xunKong?: { xun: string; kong: string };
+      taiYuan?: string;
+      mingGong?: string;
+      daYun?: Array<{
+        index: number;
+        ganzhi: string;
+        startAge: number;
+        endAge: number;
+        startYear: number;
+        endYear: number;
+      }>;
+      currentDaYun?: {
+        index: number;
+        ganzhi: string;
+        startAge: number;
+        endAge: number;
+        startYear: number;
+        endYear: number;
+      };
+    };
+    section(doc, '四柱排盘');
+    table(
+      doc,
+      ['柱位', '干支', '五行', '纳音', '十神', '藏干', '帝旺'],
+      data.pillars.map((p) => [
+        p.position === 'year'
+          ? '年柱'
+          : p.position === 'month'
+            ? '月柱'
+            : p.position === 'day'
+              ? '日柱'
+              : '时柱',
+        p.ganzhi,
+        p.wuxing,
+        p.nayin,
+        `${p.shishenGan} / ${p.shishenZhi}`,
+        p.hideGan,
+        p.dishi,
+      ]),
+      [0.11, 0.13, 0.1, 0.13, 0.22, 0.13, 0.18],
+    );
+    kv(doc, '日主', `${data.dayMaster.gan}（五行${data.dayMaster.wuxing}）`);
+    kv(doc, '旺衰', data.strength);
+    if (data.xunKong) kv(doc, '旬空', `${data.xunKong.xun}旬，空 ${data.xunKong.kong}`);
+    if (data.taiYuan) kv(doc, '胎元', data.taiYuan);
+    if (data.mingGong) kv(doc, '命宫', data.mingGong);
+
+    section(doc, '五行统计');
+    for (const [wuxing, count] of Object.entries(data.wuxingCount)) {
+      kv(doc, `五${wuxing}`, `${count} 处`);
+    }
+
+    section(doc, '十神结构');
+    table(
+      doc,
+      ['十神', '数量'],
+      data.shishenStats.map((s) => [s.name, String(s.count)]),
+      [0.5, 0.2],
+    );
+
+    if (data.daYun && data.daYun.length > 0) {
+      section(doc, '大运走势');
+      const cur = data.currentDaYun;
+      table(
+        doc,
+        ['大运', '干支', '年龄段', '年份段', '备注'],
+        data.daYun.map((y) => [
+          String(y.index),
+          y.ganzhi,
+          `${y.startAge}-${y.endAge} 岁`,
+          `${y.startYear}-${y.endYear}`,
+          cur && cur.index === y.index ? '当前大运' : '',
+        ]),
+        [0.12, 0.15, 0.22, 0.26, 0.25],
+        cur ? new Set([cur.index]) : new Set(),
+      );
+    }
+  }
+
+  for (const s of d.schools) {
+    if (primary && s === primary) continue;
+    section(doc, `${s.school}（${s.version}）`);
+    if (s.note) para(doc, s.note, 14);
+    if (s.data) {
+      for (const [k, v] of Object.entries(s.data as Record<string, unknown>)) {
+        const label = SCHOOL_KEY_LABEL[k] ?? k;
+        if (typeof v === 'string') kv(doc, label, v);
+        else if (typeof v === 'number') kv(doc, label, String(v));
+      }
+    }
+  }
+
+  if (d.conflicts && d.conflicts.length > 0) {
+    section(doc, '流派冲突');
+    d.conflicts.forEach((c, i) => listItem(doc, i + 1, c));
+  }
+  if (d.schoolNote) noteBlock(doc, d.schoolNote, '流派口径说明');
+  if (d.dayPrecisionOnly) noteBlock(doc, '本案例仅日级精度，时辰信息未参与排盘。', '精度提示');
+}
+
+function renderL3(doc: PDFKit.PDFDocument, d: L3Output): void {
+  if (d.disenchantNote) noteBlock(doc, d.disenchantNote, '科学祛魅说明');
+
+  section(doc, '人格画像');
+  table(
+    doc,
+    ['维度', '评分', '解读'],
+    d.personality.map((p) => [p.dimension, `${p.score}`, p.desc]),
+    [0.3, 0.1, 0.6],
+  );
+
+  section(doc, '天赋优势');
+  d.strengths.forEach((s, i) => listItem(doc, i + 1, s));
+
+  section(doc, '成长方向');
+  d.growth.forEach((g, i) => listItem(doc, i + 1, g));
+
+  if (d.behaviorLogic) {
+    section(doc, '行为逻辑');
+    para(doc, d.behaviorLogic, 14);
+  }
+}
+
+function renderL4(doc: PDFKit.PDFDocument, d: L4Output): void {
+  section(doc, '权重模型');
+  kv(doc, '先天结构', `${Math.round(d.weightModel.xiantian * 100)}%`);
+  kv(doc, '流年行运', `${Math.round(d.weightModel.liunian * 100)}%`);
+  kv(doc, '人为主动', `${Math.round(d.weightModel.renwei * 100)}%`);
+  if (d.weightModel.note) noteBlock(doc, d.weightModel.note, '模型说明');
+
+  section(doc, '六维落地');
+  for (const dim of d.dimensions) {
+    const title = `${dim.name}（综合分 ${dim.total}）`;
+    section(doc, title);
+    kv(doc, '先天基础', `${dim.xiantian} 分`);
+    kv(doc, '流年助推', `${dim.liunian} 分`);
+    kv(doc, '人为空间', `${dim.renwei} 分`);
+    if (dim.advice) para(doc, `建议：${dim.advice}`, 14);
+  }
+
+  if (d.summary) noteBlock(doc, d.summary, '本层总结');
+}
+
+function renderL5(doc: PDFKit.PDFDocument, d: L5Output): void {
+  section(doc, '执念模式');
+  for (const p of d.karmaPatterns) {
+    section(doc, p.name);
+    if (p.cause) para(doc, `成因：${p.cause}`, 14);
+    if (p.manifestation) para(doc, `表现：${p.manifestation}`, 14);
+    if (p.root) para(doc, `根源：${p.root}`, 14);
+  }
+
+  if (d.mainKnot) {
+    noteBlock(doc, `主卡点：${d.mainKnot}`, '核心卡点');
+  }
+
+  section(doc, '化解路径');
+  d.resolutionPath.forEach((r, i) => listItem(doc, i + 1, r));
+
+  if (d.note) noteBlock(doc, d.note, '本层说明');
+}
+
+function renderL6(doc: PDFKit.PDFDocument, d: L6Output): void {
+  section(doc, '四条平行命运线');
+  for (const line of d.lines) {
+    section(doc, `${line.name}（契合度 ${line.fit}）`);
+    if (line.strategy) para(doc, `策略：${line.strategy}`, 14);
+    if (line.trigger) para(doc, `触发：${line.trigger}`, 14);
+    if (line.risk) para(doc, `风险：${line.risk}`, 14);
+  }
+
+  section(doc, '关键分叉点');
+  table(
+    doc,
+    ['年龄', '年份', '背景', '决策 A → 路径', '决策 B → 路径'],
+    d.branchPoints.map((b) => [
+      `${b.age} 岁`,
+      `${b.year}`,
+      b.context,
+      `${b.decisionA}\n→ ${b.pathA}`,
+      `${b.decisionB}\n→ ${b.pathB}`,
+    ]),
+    [0.09, 0.1, 0.31, 0.25, 0.25],
+  );
+
+  if (d.note) noteBlock(doc, d.note, '本层说明');
+}
+
+function renderL7(doc: PDFKit.PDFDocument, d: L7Output): void {
+  section(doc, '元规则');
+  d.metaRules.forEach((r, i) => listItem(doc, i + 1, r));
+
+  section(doc, '冲突裁定');
+  for (const c of d.conflictResolution) {
+    para(doc, `冲突：${c.conflict}`, 14);
+    noteBlock(doc, `裁定：${c.ruling}`, '裁定结果');
+    if (c.basis) para(doc, `依据：${c.basis}`, 14);
+  }
+
+  section(doc, '综合结论');
+  d.synthesis.forEach((s, i) => listItem(doc, i + 1, s));
+
+  if (d.coreNote) noteBlock(doc, d.coreNote, '内核声明');
+}
+
+function renderL8(doc: PDFKit.PDFDocument, d: L8Output): void {
+  for (const lv of d.levels) {
+    section(doc, `第 ${lv.level} 级 · ${lv.name}`);
+    for (const item of lv.items) {
+      ensureSpace(doc, 30);
+      doc
+        .fillColor(DARK)
+        .fontSize(10.5)
+        .font(FONT_BOLD)
+        .text(`● ${item.title}`, doc.page.margins.left + 14, doc.y, {
+          width: availWidth(doc) - 14,
+        });
+      doc.moveDown(0.2);
+      para(doc, item.content, 28);
+      kv(doc, '执行周期', item.execCycle);
+    }
+  }
+  if (d.note) noteBlock(doc, d.note, '本层说明');
+}
+
+function renderL9(doc: PDFKit.PDFDocument, d: L9Output): void {
+  section(doc, '人生课题');
+  for (const l of d.lifeLessons) {
+    section(doc, l.title);
+    para(doc, l.content, 14);
+  }
+
+  if (d.essence) noteBlock(doc, d.essence, '心性本质');
+
+  if (d.mantra) {
+    ensureSpace(doc, 60);
+    doc.moveDown(1);
+    doc
+      .fillColor(GOLD)
+      .fontSize(14)
+      .font(FONT_BOLD)
+      .text(`「${d.mantra}」`, doc.page.margins.left + 14, doc.y, {
+        width: availWidth(doc) - 28,
+        align: 'center',
+      });
+    doc.moveDown(1);
+  }
+
+  if (d.finalNote) noteBlock(doc, d.finalNote, '最终声明');
 }
 
 function drawSection(doc: PDFKit.PDFDocument, item: NineLayerReportItem): void {
   if (!item.data) {
-    doc
-      .fillColor('#999')
-      .fontSize(11)
-      .font(FONT)
-      .text(`${item.note ?? '暂无内容'}`);
-    doc.moveDown(1);
+    noteBlock(doc, item.note ?? '该层尚未上线。', '内容暂未开放');
     return;
   }
-  const lines: string[] = [];
-  flatten(item.data, '', lines);
-  for (const line of lines) {
-    ensureSpace(doc, 20);
-    doc
-      .fillColor('#333')
-      .fontSize(10)
-      .font(FONT)
-      .text(line, doc.page.margins.left + 14, doc.y, {
-        width: doc.page.width - doc.page.margins.left * 2 - 14,
-      });
+  switch (item.layer) {
+    case 1:
+      renderL1(doc, item.data as L1Output);
+      break;
+    case 2:
+      renderL2(doc, item.data as L2Output);
+      break;
+    case 3:
+      renderL3(doc, item.data as L3Output);
+      break;
+    case 4:
+      renderL4(doc, item.data as L4Output);
+      break;
+    case 5:
+      renderL5(doc, item.data as L5Output);
+      break;
+    case 6:
+      renderL6(doc, item.data as L6Output);
+      break;
+    case 7:
+      renderL7(doc, item.data as L7Output);
+      break;
+    case 8:
+      renderL8(doc, item.data as L8Output);
+      break;
+    case 9:
+      renderL9(doc, item.data as L9Output);
+      break;
+    default:
+      para(doc, '未知层。');
   }
-  doc.moveDown(1);
 }
 
 function main(): void {
@@ -227,14 +667,14 @@ function main(): void {
 
   // ---------- 封面 ----------
   doc
-    .fillColor('#1a1a1a')
+    .fillColor(DARK)
     .fontSize(28)
     .font(FONT_BOLD)
     .text('全域超验无限命运演算系统', { align: 'center' });
   doc.moveDown(0.5);
-  doc.fillColor('#c8a04a').fontSize(18).font(FONT_BOLD).text('全量推演报告', { align: 'center' });
+  doc.fillColor(GOLD).fontSize(18).font(FONT_BOLD).text('全量推演报告', { align: 'center' });
   doc.moveDown(2);
-  doc.font(FONT).fontSize(12).fillColor('#333');
+  doc.font(FONT).fontSize(12).fillColor(MID);
   const coverRows: Array<[string, string]> = [
     ['测试案例', 'verify_all.ts 主用例'],
     ['公历生日', '2002-11-29（周五）'],
@@ -251,14 +691,14 @@ function main(): void {
   }
   doc.moveDown(2);
   doc
-    .fillColor('#c8a04a')
+    .fillColor(GOLD)
     .fontSize(11)
     .text('本报告仅供文化娱乐与自我探索参考，不构成任何专业建议。', { align: 'center' });
   doc.addPage();
 
   // ---------- 九层正文 ----------
   for (const item of report) {
-    drawPageHeader(doc, `L${item.layer} · ${item.name}  （V${item.version}）`);
+    drawPageHeader(doc, `L${item.layer} · ${item.name}  （${item.version}）`);
     drawSection(doc, item);
   }
 
@@ -271,7 +711,7 @@ function main(): void {
     doc
       .font(FONT)
       .fontSize(9)
-      .fillColor('#999')
+      .fillColor(GRAY)
       .text(
         `第 ${n} 页 / 共 ${pageCount} 页`,
         page.width / 2 - 40,
