@@ -67,6 +67,26 @@ describe('Loading 测算页', () => {
     }
   });
 
+  it('动画推进中卸载组件：不残留悬挂导航定时器', async () => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = renderLoading({ recordId: 7 });
+      // 推进 2 层后卸载（此时尚未完成动画）
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(220 * 2);
+      });
+      unmount();
+      // 即使时间推进到「完成 + 300ms」，也不应出现报告页（导航定时器已被 cleanup 清理）
+      const total = LAYER_SKELETON.length;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(220 * (total - 2) + 300);
+      });
+      expect(screen.queryByTestId('report-route')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('点击跳过动画立即进入报告页', async () => {
     renderLoading({ recordId: 7 });
     fireEvent.click(screen.getByRole('button', { name: /跳过动画/ }));
