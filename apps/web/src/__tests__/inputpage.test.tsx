@@ -281,4 +281,13 @@ describe('Input 录入页', () => {
       vi.useRealTimers();
     }
   });
+
+  it('日期级精度展示正午推定提示，时辰级不展示', () => {
+    renderInput();
+    const precision = screen.getByLabelText(/时间精确度/);
+    fireEvent.change(precision, { target: { value: 'day' } });
+    expect(screen.getByText(/按正午 12:00 推定时辰/)).toBeInTheDocument();
+    fireEvent.change(precision, { target: { value: 'hour' } });
+    expect(screen.queryByText(/按正午 12:00 推定时辰/)).not.toBeInTheDocument();
+  });
 });

@@ -205,6 +205,11 @@ export default function Input() {
             </option>
           ))}
         </select>
+        {!timeVisible && (
+          <span className="hint">
+            日期级档案将按正午 12:00 推定时辰占位，仅作日柱级别参考，结果置信度下调。
+          </span>
+        )}
       </label>
 
       <label className="field">
