@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { phoneLogin, sendSmsCode, setToken, updateProfile, type User } from '../api/client';
+import {
+  clearToken,
+  phoneLogin,
+  sendSmsCode,
+  setToken,
+  updateProfile,
+  type User,
+} from '../api/client';
 
 /**
  * 登录 / 个人资料编辑面板。
@@ -77,6 +84,17 @@ export default function LoginPanel({ me, onLogin }: { me: User | null; onLogin: 
     }
   };
 
+  const logout = () => {
+    // 退出登录：清除本地 token 回到游客模式。服务端为无状态 JWT 不做撤销，
+    // 账号数据仍保留，下次登录可恢复（游客数据在登录时自动合并，无丢失风险）。
+    clearToken();
+    setPhone('');
+    setCode('');
+    setSmsMsg('已退出登录');
+    setEditNick(false);
+    onLogin();
+  };
+
   const saveNickname = async () => {
     const nickname = nickDraft.trim();
     if (!nickname || nickname.length > 30) {
@@ -122,6 +140,9 @@ export default function LoginPanel({ me, onLogin }: { me: User | null; onLogin: 
               {me.nickname}（{me.phone_masked}）
               <button className="link-btn" onClick={() => setEditNick(true)}>
                 改昵称
+              </button>
+              <button className="link-btn danger" onClick={logout}>
+                退出登录
               </button>
             </>
           )}
