@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   calculate,
   cancelOrder,
@@ -232,13 +232,18 @@ export default function History() {
                       <td className="dim">{o.created_at}</td>
                       <td>
                         {o.entitlement_status === 'pending' && (
-                          <button
-                            className="link-btn danger"
-                            disabled={cancellingId === o.id}
-                            onClick={() => cancelOne(o)}
-                          >
-                            {cancellingId === o.id ? '取消中…' : '取消订单'}
-                          </button>
+                          <>
+                            <Link to={`/report/${o.record_id ?? ''}`} className="link-btn">
+                              去支付
+                            </Link>
+                            <button
+                              className="link-btn danger"
+                              disabled={cancellingId === o.id}
+                              onClick={() => cancelOne(o)}
+                            >
+                              {cancellingId === o.id ? '取消中…' : '取消订单'}
+                            </button>
+                          </>
                         )}
                       </td>
                     </tr>
