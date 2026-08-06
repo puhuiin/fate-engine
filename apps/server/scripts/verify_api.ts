@@ -162,6 +162,28 @@ check(
   '城市检索 q=北 返回结果',
   loc.status === 200 && Array.isArray(loc.json.data) && (loc.json.data as unknown[]).length > 0,
 );
+const locEmpty = await call('GET', '/api/v1/locations/search?q=');
+check(
+  '城市检索空查询返回空数组',
+  locEmpty.status === 200 && Array.isArray(locEmpty.json.data) && (locEmpty.json.data as unknown[]).length === 0,
+);
+const locProvince = await call('GET', '/api/v1/locations/search?q=广东省');
+check(
+  '城市检索按省份匹配（广东省 → 含广州/深圳）',
+  locProvince.status === 200 &&
+    (locProvince.json.data as Array<{ name: string }>).some((c) => c.name === '广州') &&
+    (locProvince.json.data as Array<{ name: string }>).some((c) => c.name === '深圳'),
+);
+const locNone = await call('GET', '/api/v1/locations/search?q=不存在城市xyz');
+check(
+  '城市检索无匹配返回空数组',
+  locNone.status === 200 && (locNone.json.data as unknown[]).length === 0,
+);
+const locLong = await call('GET', '/api/v1/locations/search?q=北京上海广州深圳杭州成都重庆武汉西安南京');
+check(
+  '城市检索超长关键词截断不 500',
+  locLong.status === 200 && Array.isArray(locLong.json.data),
+);
 
 // ---------- 6. 测算：未付费锁定 L4-L9 ----------
 const calc = await call('POST', '/api/v1/calculate', {
