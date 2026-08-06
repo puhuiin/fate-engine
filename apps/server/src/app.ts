@@ -75,22 +75,38 @@ function parseTrustProxy(): boolean | number | undefined {
   return raw === '1' || raw === 'true';
 }
 
+interface WebDist {
+  /** 前端构建产物根目录（不存在则仅提供 API 服务） */
+  root: string | null;
+  /** index.html 内存常驻副本：SPA 路由回退时直接返回，避免每次导航同步读盘 */
+  indexHtml: Buffer | null;
+}
+
 /**
  * 生产静态托管目录：优先 WEB_DIST_DIR 环境变量，否则回退到前端构建产物
- * （apps/web/dist，Docker 镜像内已合并）。
+ * （apps/web/dist，Docker 镜像内已合并）。同时一次性读入 index.html 常驻内存，
+ * 供 SPA 兜底回退复用，消除每次前端路由导航的 fs.existsSync + readFileSync 读盘开销。
  */
-function resolveWebDist(): string | null {
-  const env = process.env.WEB_DIST_DIR;
-  if (env && fs.existsSync(env)) return path.resolve(env);
+function resolveWebDist(): WebDist {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
+    process.env.WEB_DIST_DIR, // 显式指定优先
     path.resolve(here, '../../web/dist'),
     path.resolve(here, '../../../web/dist'),
   ];
   for (const c of candidates) {
-    if (fs.existsSync(path.join(c, 'index.html'))) return c;
+    if (!c) continue;
+    const root = path.resolve(c);
+    const idx = path.join(root, 'index.html');
+    if (fs.existsSync(idx)) {
+      try {
+        return { root, indexHtml: fs.readFileSync(idx) };
+      } catch {
+        /* 读取失败继续尝试下一个候选 */
+      }
+    }
   }
-  return null;
+  return { root: null, indexHtml: null };
 }
 
 export function buildApp(db: Db, opts: BuildAppOpts = {}) {
@@ -155,9 +171,13 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
       /** 回显请求追踪 ID（客户端可传 X-Request-Id 覆盖），便于前后端联调定位 */
       'X-Request-Id': req.id,
-      /** API 响应默认禁止缓存，避免鉴权数据（报告/手机号/订单）落入代理或浏览器缓存 */
-      'Cache-Control': 'no-store',
     });
+    // API 响应含鉴权/报告/手机号/订单等敏感数据，一律禁止缓存；
+    // 静态资源与 SPA 入口的缓存策略由 @fastify/static 的 setHeaders 与 notFoundHandler 分级设置，
+    // 使内容哈希资源可长缓存、入口文件可即时更新。
+    if (req.url.split('?')[0].startsWith('/api')) {
+      reply.header('Cache-Control', 'no-store');
+    }
   });
 
   /** 响应压缩（仅 gzip，体积达标才压缩） */
@@ -180,9 +200,26 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   });
 
   /** 未知 API 路由统一返回 ApiResp 结构（而非 Fastify 默认纯文本 404）；非 API 路径回退到前端 SPA index.html */
-  const webDist = resolveWebDist();
+  const { root: webDist, indexHtml } = resolveWebDist();
   if (webDist) {
-    app.register(fastifyStatic, { root: webDist, prefix: '/', wildcard: false });
+    app.register(fastifyStatic, {
+      root: webDist,
+      prefix: '/',
+      wildcard: false,
+      // 启用条件请求（ETag / Last-Modified），命中时返回 304 节省带宽
+      etag: true,
+      lastModified: true,
+      setHeaders: (reply) => {
+        // Vite 内容哈希资源（/assets/*）文件名含哈希，可永久不可变缓存；
+        // index.html 等入口文件需每次重验证，保证发版后立即生效。
+        const url = reply.request.url.split('?')[0];
+        if (url.startsWith('/assets/')) {
+          reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          reply.header('Cache-Control', 'no-cache');
+        }
+      },
+    });
     app.log.info({ dir: webDist }, '已托管前端静态资源');
   } else {
     app.log.warn('未找到前端构建产物，仅提供 API 服务');
@@ -192,8 +229,10 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     if (pathname.startsWith('/api')) {
       return reply.code(404).send(fail(404, `接口不存在：${pathname}`));
     }
-    if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {
-      return reply.type('text/html').send(fs.readFileSync(path.join(webDist, 'index.html')));
+    // SPA 兜底：未知前端路由统一回退 index.html（内存常驻，避免每次导航读盘）
+    if (indexHtml) {
+      reply.header('Cache-Control', 'no-cache');
+      return reply.type('text/html').send(indexHtml);
     }
     return reply.code(404).send({ code: 404, msg: 'Not Found', data: null });
   });
