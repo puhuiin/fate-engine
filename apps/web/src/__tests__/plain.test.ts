@@ -56,7 +56,7 @@ describe('buildPlainGuide 白话导读构建', () => {
     const multi = points.find((p) => p.tag === '多线');
     expect(multi).toBeDefined();
     expect(multi?.title).toContain('命运线');
-    expect((multi?.text.indexOf('修行') ?? 0)).toBeLessThan(multi?.text.indexOf('事业') ?? 0);
+    expect(multi?.text.indexOf('修行') ?? 0).toBeLessThan(multi?.text.indexOf('事业') ?? 0);
     expect(multi?.text).toContain('向内求索');
   });
 });
