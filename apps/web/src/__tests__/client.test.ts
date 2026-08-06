@@ -114,6 +114,42 @@ describe('request 传输层', () => {
     expect(url).toContain('page=2');
     expect(url).toContain('pageSize=20');
   });
+
+  it('JSON 但缺少 code 字段报格式异常', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ data: [], msg: '' }),
+    } as unknown as Response);
+    await expect(listRecords()).rejects.toThrow('服务响应格式异常');
+  });
+
+  it('业务错误码（非 401）原样透传且不触发登出', async () => {
+    setToken('tok');
+    fetchMock.mockResolvedValue(json(500, null));
+    const res = await listRecords();
+    expect(res.code).toBe(500);
+    expect(getToken()).toBe('tok');
+  });
+
+  it('请求挂起超过超时阈值自动中止并抛超时错误', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(
+      (_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          );
+        }),
+    );
+    const p = listRecords(1, 10);
+    const assertion = expect(p).rejects.toThrow('网络请求超时或失败');
+    await vi.advanceTimersByTimeAsync(60_000);
+    await assertion;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
 });
 
 describe('notifyToast', () => {
