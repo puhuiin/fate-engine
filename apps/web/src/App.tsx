@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { NavLink, Route, Routes, Link } from 'react-router-dom';
+import { NavLink, Route, Routes, Link, useLocation } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AUTH_CHANGED_EVENT, TOAST_EVENT, getMe } from './api/client';
 
@@ -20,6 +20,12 @@ function RouteFallback() {
 export default function App() {
   const [user, setUser] = useState<{ phone_masked: string | null; nickname: string } | null>(null);
   const [toast, setToast] = useState('');
+  const location = useLocation();
+
+  // 路由切换回到顶部，避免长页面（报告/历史）间跳转停留在旧滚动位置
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   useEffect(() => {
     const refresh = () => {
