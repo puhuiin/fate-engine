@@ -46,7 +46,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 6 组确定性回归脚本（44 + 10 + 18 + 47 + 156 + 5 = 280 断言）；前端 11 文件 72 用例（含 React 组件测试） |
+| 校验 | 6 组确定性回归脚本（44 + 10 + 18 + 47 + 156 + 5 = 280 断言）；前端 12 文件 82 用例（含 React 组件测试） |
 
 ---
 
