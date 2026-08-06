@@ -50,10 +50,13 @@ const smsCols = tableCols('sms_code');
 check('sms_code 含 fail_count 列', smsCols.has('fail_count'));
 
 // 3b. 迁移新增列可直接参与业务读写（默认值生效）
-const uid = Number(db.prepare(`INSERT INTO sys_user (nickname) VALUES ('mig')`).run().lastInsertRowid);
+const uid = Number(
+  db.prepare(`INSERT INTO sys_user (nickname) VALUES ('mig')`).run().lastInsertRowid,
+);
 const aid = Number(
-  db.prepare(`INSERT INTO user_birth_archive (user_id, solar_date) VALUES (?, '2000-01-01')`).run(uid)
-    .lastInsertRowid,
+  db
+    .prepare(`INSERT INTO user_birth_archive (user_id, solar_date) VALUES (?, '2000-01-01')`)
+    .run(uid).lastInsertRowid,
 );
 const rid = Number(
   db.prepare(`INSERT INTO calculate_record (archive_id, user_id) VALUES (?, ?)`).run(aid, uid)
@@ -62,9 +65,9 @@ const rid = Number(
 db.prepare(
   `INSERT INTO luck_plan (record_id, level, title, content, exec_cycle) VALUES (?, 1, 't', 'c', 'daily')`,
 ).run(rid);
-const planRow = db.prepare(
-  `SELECT status, finished_at FROM luck_plan WHERE record_id = ?`,
-).get(rid) as { status: string; finished_at: string | null };
+const planRow = db
+  .prepare(`SELECT status, finished_at FROM luck_plan WHERE record_id = ?`)
+  .get(rid) as { status: string; finished_at: string | null };
 check(
   'luck_plan 新列默认值生效（status=pending, finished_at=NULL）',
   planRow.status === 'pending' && planRow.finished_at === null,
@@ -72,16 +75,16 @@ check(
 db.prepare(
   `INSERT INTO order_pay (user_id, order_no, amount_cents, entitlement_status) VALUES (?, 'ORD-CHK', 100, 'pending')`,
 ).run(uid);
-const payRow = db.prepare(
-  `SELECT record_id FROM order_pay WHERE order_no = 'ORD-CHK'`,
-).get() as { record_id: number | null };
+const payRow = db.prepare(`SELECT record_id FROM order_pay WHERE order_no = 'ORD-CHK'`).get() as {
+  record_id: number | null;
+};
 check('order_pay record_id 新增列默认为 NULL', payRow.record_id === null);
 db.prepare(
   `INSERT INTO sms_code (phone, code, expires_at) VALUES ('19000000000', '1234', '2030-01-01 00:00:00')`,
 ).run();
-const smsRow = db.prepare(
-  `SELECT fail_count FROM sms_code WHERE phone = '19000000000'`,
-).get() as { fail_count: number };
+const smsRow = db.prepare(`SELECT fail_count FROM sms_code WHERE phone = '19000000000'`).get() as {
+  fail_count: number;
+};
 check('sms_code fail_count 新列默认值生效（=0）', smsRow.fail_count === 0);
 
 // 4. 旧库升级：模拟缺迁移记录的库，删除部分记录后应补齐

@@ -165,7 +165,9 @@ check(
 const locEmpty = await call('GET', '/api/v1/locations/search?q=');
 check(
   '城市检索空查询返回空数组',
-  locEmpty.status === 200 && Array.isArray(locEmpty.json.data) && (locEmpty.json.data as unknown[]).length === 0,
+  locEmpty.status === 200 &&
+    Array.isArray(locEmpty.json.data) &&
+    (locEmpty.json.data as unknown[]).length === 0,
 );
 const locProvince = await call('GET', '/api/v1/locations/search?q=广东省');
 check(
@@ -179,11 +181,11 @@ check(
   '城市检索无匹配返回空数组',
   locNone.status === 200 && (locNone.json.data as unknown[]).length === 0,
 );
-const locLong = await call('GET', '/api/v1/locations/search?q=北京上海广州深圳杭州成都重庆武汉西安南京');
-check(
-  '城市检索超长关键词截断不 500',
-  locLong.status === 200 && Array.isArray(locLong.json.data),
+const locLong = await call(
+  'GET',
+  '/api/v1/locations/search?q=北京上海广州深圳杭州成都重庆武汉西安南京',
 );
+check('城市检索超长关键词截断不 500', locLong.status === 200 && Array.isArray(locLong.json.data));
 
 // ---------- 6. 测算：未付费锁定 L4-L9 ----------
 const calc = await call('POST', '/api/v1/calculate', {
@@ -1213,10 +1215,7 @@ check(
 const filterBadType = await call('GET', '/api/v1/records?calcType=quantum-extra', {
   token: tokenA,
 });
-check(
-  '非法 calcType 筛选 400',
-  filterBadType.status === 400 && filterBadType.json.code === 400,
-);
+check('非法 calcType 筛选 400', filterBadType.status === 400 && filterBadType.json.code === 400);
 check(
   '非法枚举值错误消息为中文（不合法字段取值）',
   /[\u4e00-\u9fa5]/.test(filterBadType.json.msg ?? '') &&
