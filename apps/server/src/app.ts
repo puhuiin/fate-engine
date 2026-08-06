@@ -40,6 +40,11 @@ export interface BuildAppOpts {
    * （'true'/'1' 或数字）；未配置时不信任（直连场景）。
    */
   trustProxy?: boolean | number | string[];
+  /**
+   * 静态托管根目录（测试注入用）。缺省走 resolveWebDist()：优先 WEB_DIST_DIR
+   * 环境变量，否则回退到前端构建产物路径。
+   */
+  webDistDir?: string;
 }
 
 /** 请求体上限（JSON API 场景 64KB 足够，防超大 body 资源耗尽） */
@@ -147,10 +152,16 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       'Referrer-Policy': 'no-referrer',
       'X-XSS-Protection': '1; mode=block',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+      /**
+       * 跨源隔离纵深：COOP same-origin 防止恶意站点通过 window.opener 控制本页，
+       * CORP same-origin 阻止其他源加载本域资源（响应体仅限同源/同站消费）。
+       */
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Resource-Policy': 'same-origin',
       /** 回显请求追踪 ID（客户端可传 X-Request-Id 覆盖），便于前后端联调定位 */
       'X-Request-Id': req.id,
       /** API 响应默认禁止缓存，避免鉴权数据（报告/手机号/订单）落入代理或浏览器缓存 */
-      'Cache-Control': 'no-store',
+      'Cache-Control': req.url.startsWith('/api') ? 'no-store' : 'no-cache',
     });
   });
 
@@ -174,9 +185,26 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   });
 
   /** 未知 API 路由统一返回 ApiResp 结构（而非 Fastify 默认纯文本 404）；非 API 路径回退到前端 SPA index.html */
-  const webDist = resolveWebDist();
+  const webDist = opts.webDistDir ?? resolveWebDist();
   if (webDist) {
-    app.register(fastifyStatic, { root: webDist, prefix: '/', wildcard: false });
+    app.register(fastifyStatic, {
+      root: webDist,
+      prefix: '/',
+      wildcard: false,
+      /**
+       * 缓存策略：Vite 产物位于 assets/ 且文件名带内容 hash，可 immutable 强缓存一年；
+       * index.html 是 SPA 入口（无 hash），必须 no-cache 保证新版本发布后立即生效。
+       * 全局 onRequest 已为静态路径设置 no-cache，这里对 hash 资源升级为强缓存。
+       */
+      setHeaders: (reply, filePath) => {
+        const base = path.basename(filePath);
+        if (base === 'index.html') {
+          reply.header('Cache-Control', 'no-cache');
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    });
     app.log.info({ dir: webDist }, '已托管前端静态资源');
   } else {
     app.log.warn('未找到前端构建产物，仅提供 API 服务');

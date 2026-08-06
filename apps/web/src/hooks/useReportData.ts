@@ -143,8 +143,8 @@ export function useReportData(recordId: number) {
   useEffect(() => {
     (async () => {
       try {
-        await reload();
-        await refreshPlansRisks();
+        // 报告与计划/风险无依赖，并行加载省一个 RTT
+        await Promise.all([reload(), refreshPlansRisks()]);
       } catch (e) {
         setLoadError(e instanceof Error ? e.message : '报告加载失败，请刷新重试');
       } finally {

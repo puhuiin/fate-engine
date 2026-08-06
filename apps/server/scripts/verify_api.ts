@@ -9,6 +9,9 @@ import { decompress } from '../src/lib/compress.js';
 import { createRepos } from '../src/db/repo/index.js';
 import { startOrderExpiryTask } from '../src/jobs/expireOrders.js';
 import type { FastifyInstance } from 'fastify';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const db = createDb(':memory:');
 const app: FastifyInstance = buildApp(db, { logger: false, rateLimit: false });
@@ -786,7 +789,7 @@ const bareBearer = await app.inject({
 });
 check('空 Bearer token 401', bareBearer.statusCode === 401 && bareBearer.json().code === 401);
 
-// 14.6 基础安全响应头（nosniff / DENY / no-referrer / Permissions-Policy）
+// 14.6 基础安全响应头（nosniff / DENY / no-referrer / Permissions-Policy / 跨源隔离）
 const secRes = await app.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
 check(
   '安全响应头 nosniff/DENY/no-referrer/XSS 齐备',
@@ -800,6 +803,11 @@ check(
   (secRes.headers['permissions-policy'] ?? '').includes('camera=()') &&
     (secRes.headers['permissions-policy'] ?? '').includes('geolocation=()') &&
     (secRes.headers['permissions-policy'] ?? '').includes('payment=()'),
+);
+check(
+  '跨源隔离 COOP/CORP 为 same-origin',
+  secRes.headers['cross-origin-opener-policy'] === 'same-origin' &&
+    secRes.headers['cross-origin-resource-policy'] === 'same-origin',
 );
 
 // 14.7 响应 gzip 压缩：大响应按 Accept-Encoding 压缩，小响应不压缩
@@ -1083,6 +1091,38 @@ const zombieAfter = db
   .prepare('SELECT entitlement_status FROM order_pay WHERE id = ?')
   .get(zombieId) as { entitlement_status: string };
 check('订单过期批量清理任务作废旧单', zombieAfter.entitlement_status === 'expired');
+
+// ---------- 14. 静态托管缓存策略 ----------
+// 自建临时 dist，验证静态资源缓存头与 SPA 回退（不依赖前端构建产物）
+const tmpDist = fs.mkdtempSync(path.join(os.tmpdir(), 'fate-verify-dist-'));
+fs.mkdirSync(path.join(tmpDist, 'assets'), { recursive: true });
+fs.writeFileSync(path.join(tmpDist, 'index.html'), '<!doctype html><html><body>app</body></html>');
+fs.writeFileSync(path.join(tmpDist, 'assets', 'index-a1b2c3.js'), 'console.log(1)');
+const staticDb = createDb(':memory:');
+const staticApp = buildApp(staticDb, {
+  logger: false,
+  rateLimit: false,
+  webDistDir: tmpDist,
+});
+const spaHome = await staticApp.inject({ method: 'GET', url: '/' });
+check(
+  '静态托管 index.html 不缓存（Cache-Control: no-cache）',
+  spaHome.statusCode === 200 &&
+    String(spaHome.headers['cache-control']).toLowerCase().includes('no-cache'),
+);
+const hashAsset = await staticApp.inject({ method: 'GET', url: '/assets/index-a1b2c3.js' });
+check(
+  'hash 静态资源强缓存（max-age + immutable）',
+  hashAsset.statusCode === 200 &&
+    String(hashAsset.headers['cache-control']).toLowerCase().includes('immutable'),
+);
+const spaFallback = await staticApp.inject({ method: 'GET', url: '/reports/123' });
+check(
+  '未知非 API 路径回退 SPA index.html',
+  spaFallback.statusCode === 200 &&
+    String(spaFallback.headers['content-type']).includes('text/html'),
+);
+staticApp.close();
 
 db.close();
 

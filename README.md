@@ -35,7 +35,7 @@
 - **白话解读**：报告顶部「先看这里」三分钟导读，把专业结论翻译成客户能看懂的大白话；L1/L2 提供「这些词是什么意思？」术语对照折叠表
 - **前端性能**：路由级代码分割（React.lazy），首屏只加载测算页；全局 ErrorBoundary + 单层渲染边界，局部异常不白屏
 - **响应压缩**：后端对体积达标的大响应自动 gzip（内置 zlib，零依赖）
-- **纵深安全**：CSP（生产构建注入）+ Permissions-Policy（禁相机/定位/支付）+ nosniff/DENY 等安全响应头
+- **纵深安全**：CSP（生产构建注入）+ Permissions-Policy（禁相机/定位/支付）+ nosniff/DENY 等安全响应头；COOP/CORP 同源隔离，阻断跨源窗口接管与跨站资源加载
 - **可观测性**：全链路 `X-Request-Id` 回显 + 访问日志；错误处理器按 4xx/5xx 分级落日志，生产可定位
 
 ---
@@ -46,7 +46,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 6 组确定性回归脚本（44 + 8 + 15 + 47 + 138 + 5 = 257 断言）；前端 6 文件 29 用例（含 React 组件测试） |
+| 校验 | 6 组确定性回归脚本（44 + 8 + 15 + 47 + 142 + 5 = 261 断言）；前端 6 文件 29 用例（含 React 组件测试） |
 
 ---
 
@@ -93,7 +93,7 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（251 断言）
+# 全量回归（261 断言）
 npm run verify -w @fate/server
 
 # 分块验证
@@ -227,7 +227,7 @@ fate-engine/
 - **后台任务**：订单过期清理由 `src/jobs/expireOrders.ts` 承担（启动先清一轮 + 60s 定时，`timer.unref` 不阻塞进程退出，优雅停机时清除）
 - **Schema 演进**：`db/migrations.ts` 提供版本化迁移（`schema_migrations` 版本表 + 有序幂等迁移），启动自动应用未执行迁移；升级旧库安全可追溯，`npm run db:migrate` 可查看迁移状态
 - **可观测性**：`X-Request-Id` 全链路回显（UUID），访问日志与错误日志带 requestId 与路径；5xx 记录完整堆栈、4xx 记录告警，客户端仅收到收敛文案
-- **缓存策略**：鉴权/动态数据接口统一 `Cache-Control: no-store`，防止敏感数据进入代理缓存
+- **缓存策略**：鉴权/动态数据接口统一 `Cache-Control: no-store`，防止敏感数据进入代理缓存；静态资源分级缓存——带内容 hash 的 Vite 产物 `immutable` 强缓存一年（二次访问零网络往返），`index.html` 与 SPA 路由回退保持 `no-cache`（发布新版本立即生效），兼顾首屏性能与更新及时性
 
 ---
 
