@@ -53,7 +53,7 @@
 ## 快速开始
 
 ### 环境要求
-- Node.js ≥ 18
+- Node.js ≥ 22（与 Dockerfile / `.nvmrc` 一致；CI 在 Node 22 上跑全量回归）
 - npm ≥ 9
 
 ### 安装与启动
