@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LAYER_SKELETON } from '../layers';
 
@@ -6,7 +6,6 @@ export default function Loading() {
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as { recordId: number } | null;
-  const started = useRef(false);
   const [doneCount, setDoneCount] = useState(0);
 
   const skip = () => {
@@ -27,10 +26,9 @@ export default function Loading() {
       });
     }, 220);
     // StrictMode 下 effect 会 setup→cleanup→setup 双跑：
-    // cleanup 必须重置 started，否则第二次 setup 因 started=true 直接跳过，动画永不启动
+    // cleanup 清掉旧 interval，第二次 setup 重新开启动画，避免计时器叠加或动画停滞
     return () => {
       clearInterval(interval);
-      started.current = false;
     };
   }, [navigate, state]);
 

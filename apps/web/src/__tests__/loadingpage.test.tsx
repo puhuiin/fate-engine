@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import Loading from '../pages/Loading';
 import { LAYER_SKELETON } from '../layers';
@@ -71,5 +72,32 @@ describe('Loading 测算页', () => {
     renderLoading({ recordId: 7 });
     fireEvent.click(screen.getByRole('button', { name: /跳过动画/ }));
     expect(screen.getByTestId('report-route')).toBeInTheDocument();
+  });
+
+  it('StrictMode 双跑下动画仍启动并自动跳转', async () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <StrictMode>
+          <MemoryRouter initialEntries={[{ pathname: '/loading', state: { recordId: 7 } }]}>
+            <Routes>
+              <Route path="/loading" element={<Loading />} />
+              <Route
+                path="/report/:id"
+                element={<div data-testid="report-route">{'报告页'}</div>}
+              />
+            </Routes>
+          </MemoryRouter>
+        </StrictMode>,
+      );
+      // StrictMode 双跑后动画仍应从 L1 开始推进
+      expect(screen.getByText(/正在贯通 L1/)).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(220 * 3);
+      });
+      expect(screen.getByText(/正在贯通 L4/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
