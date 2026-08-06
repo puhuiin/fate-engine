@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type {
   L1Result,
   L2Result,
@@ -15,7 +16,7 @@ import { fmtHour } from './exportText';
 
 export { buildExportText } from './exportText';
 
-export function Layer1({ l1 }: { l1: L1Result }) {
+function Layer1Raw({ l1 }: { l1: L1Result }) {
   const t = l1.timeCorrection;
   return (
     <div className="l1-report">
@@ -150,7 +151,7 @@ type PillarRow = {
   dishi: string;
 };
 
-export function Layer2({ l2 }: { l2: L2Result }) {
+function Layer2Raw({ l2 }: { l2: L2Result }) {
   const bazi = l2.bazi;
   const pillars = (
     l2.schools.find((s) => s.school === '八字命理')?.data as { pillars: PillarRow[] } | undefined
@@ -323,7 +324,7 @@ export function Layer2({ l2 }: { l2: L2Result }) {
   );
 }
 
-export function Layer3({ l3 }: { l3: L3Result }) {
+function Layer3Raw({ l3 }: { l3: L3Result }) {
   return (
     <div className="l3-report">
       <div className="disenchant">
@@ -379,7 +380,7 @@ export function Layer3({ l3 }: { l3: L3Result }) {
   );
 }
 
-export function Layer4({ l4 }: { l4: L4Result }) {
+function Layer4Raw({ l4 }: { l4: L4Result }) {
   const w = l4.weightModel;
   return (
     <div className="l4-report">
@@ -437,7 +438,7 @@ export function Layer4({ l4 }: { l4: L4Result }) {
   );
 }
 
-export function Layer5({ l5 }: { l5: L5Result }) {
+function Layer5Raw({ l5 }: { l5: L5Result }) {
   return (
     <div className="l5-report">
       <p className="hint">{l5.note}</p>
@@ -474,7 +475,7 @@ export function Layer5({ l5 }: { l5: L5Result }) {
   );
 }
 
-export function Layer7({ l7 }: { l7: L7Result }) {
+function Layer7Raw({ l7 }: { l7: L7Result }) {
   return (
     <div className="l7-report">
       <section>
@@ -519,7 +520,7 @@ export function Layer7({ l7 }: { l7: L7Result }) {
   );
 }
 
-export function Layer8({
+function Layer8Raw({
   l8,
   plans,
   onToggle,
@@ -592,7 +593,7 @@ export function Layer8({
   );
 }
 
-export function Layer6({ l6, risks }: { l6: L6Result; risks: RiskItem[] }) {
+function Layer6Raw({ l6, risks }: { l6: L6Result; risks: RiskItem[] }) {
   return (
     <div className="l6-report">
       <p className="hint">{l6.note}</p>
@@ -690,7 +691,7 @@ export function Layer6({ l6, risks }: { l6: L6Result; risks: RiskItem[] }) {
   );
 }
 
-export function Layer9({ l9 }: { l9: L9Result }) {
+function Layer9Raw({ l9 }: { l9: L9Result }) {
   return (
     <div className="l9-report">
       <section>
@@ -714,3 +715,14 @@ export function Layer9({ l9 }: { l9: L9Result }) {
     </div>
   );
 }
+
+/** 层组件为纯展示且数据引用稳定（报告加载后不变），memo 避免父级 state 变化（如切换支付渠道）触发 9 层全部重渲染 */
+export const Layer1 = memo(Layer1Raw);
+export const Layer2 = memo(Layer2Raw);
+export const Layer3 = memo(Layer3Raw);
+export const Layer4 = memo(Layer4Raw);
+export const Layer5 = memo(Layer5Raw);
+export const Layer6 = memo(Layer6Raw);
+export const Layer7 = memo(Layer7Raw);
+export const Layer8 = memo(Layer8Raw);
+export const Layer9 = memo(Layer9Raw);

@@ -139,6 +139,28 @@ body {
   color: #3d3318;
 }
 
+/* 错误边界兜底与路由懒加载提示 */
+.error-card {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.error-card h2 {
+  color: #9c2b2b;
+}
+
+.error-card .btn-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.route-loading {
+  text-align: center;
+  padding: 56px 24px;
+}
+
 .hint {
   color: var(--dim);
   font-size: 13px;
@@ -1230,20 +1252,63 @@ table.kv td.renwei {
   }
 }
 
-/* 打印报告：隐藏导航与按钮 */
+/* 打印报告：隐藏导航/支付/锁定层，纯黑白正文，避免装饰背景浪费墨 */
 @media print {
+  @page {
+    margin: 14mm;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 12pt;
+  }
+
   .topbar,
   .layer-nav,
   .export-btn,
   .report-foot,
   .lock-banner,
-  .unlock-btn {
+  .unlock-btn,
+  .pay-channels,
+  .lock-card,
+  .layer-locked {
     display: none !important;
   }
 
-  .card {
-    box-shadow: none;
+  /* 报告头部只保留标题，去掉提示文案与渠道选择 */
+  .report > .card > h2 + .hint {
+    display: none !important;
+  }
+
+  .card,
+  .layer-card,
+  .exec-summary {
+    box-shadow: none !important;
+    background: #fff !important;
+    border: 1px solid #ccc;
     break-inside: avoid;
+    border-radius: 0;
+    padding: 10mm 6mm;
+    margin-bottom: 8mm;
+  }
+
+  .exec-summary {
+    background: #fff !important;
+  }
+
+  .pill,
+  .calc-badge,
+  .layer-badge {
+    border: 1px solid #999;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  .point-tag {
+    border-color: #999;
+    color: #000 !important;
+    background: #fff !important;
   }
 }
 
@@ -1327,4 +1392,34 @@ table.kv td.renwei {
 .plain-disclaimer {
   margin-top: 8px;
   font-size: 12px;
+}
+
+/* ============ 全局 toast 提示 ============ */
+
+.toast {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: 82vw;
+  padding: 10px 18px;
+  border-radius: 8px;
+  background: #2a2016;
+  color: #f3ead8;
+  border: 1px solid #b8860b;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-size: 14px;
+  animation: toast-in 0.18s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }

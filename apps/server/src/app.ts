@@ -18,6 +18,8 @@ import { statsRoutes } from './routes/stats.js';
 import { fail, ok } from './lib/util.js';
 import { authenticate } from './lib/auth.js';
 import { createRateLimitHook } from './lib/rateLimit.js';
+import { cachedOpenApiDoc } from './lib/openapi.js';
+import { registerCompression } from './lib/compress.js';
 import { searchCities } from './modules/l1/location.js';
 import { LAYER_META } from './report.js';
 
@@ -39,6 +41,16 @@ export interface BuildAppOpts {
    * （'true'/'1' 或数字）；未配置时不信任（直连场景）。
    */
   trustProxy?: boolean | number | string[];
+  /**
+   * 静态托管根目录（测试注入用）。缺省走 resolveWebDist()：优先 WEB_DIST_DIR
+   * 环境变量，否则回退到前端构建产物路径。
+   */
+  webDistDir?: string;
+  /**
+   * 内核审计等管理接口的管理员令牌（ADMIN_TOKEN 覆盖）。
+   * 未配置时管理接口一律拒绝（403）。
+   */
+  adminToken?: string;
 }
 
 /** 请求体上限（JSON API 场景 64KB 足够，防超大 body 资源耗尽） */
@@ -68,22 +80,38 @@ function parseTrustProxy(): boolean | number | undefined {
   return raw === '1' || raw === 'true';
 }
 
+interface WebDist {
+  /** 前端构建产物根目录（不存在则仅提供 API 服务） */
+  root: string | null;
+  /** index.html 内存常驻副本：SPA 路由回退时直接返回，避免每次导航同步读盘 */
+  indexHtml: Buffer | null;
+}
+
 /**
  * 生产静态托管目录：优先 WEB_DIST_DIR 环境变量，否则回退到前端构建产物
- * （apps/web/dist，Docker 镜像内已合并）。
+ * （apps/web/dist，Docker 镜像内已合并）。同时一次性读入 index.html 常驻内存，
+ * 供 SPA 兜底回退复用，消除每次前端路由导航的 fs.existsSync + readFileSync 读盘开销。
  */
-function resolveWebDist(): string | null {
-  const env = process.env.WEB_DIST_DIR;
-  if (env && fs.existsSync(env)) return path.resolve(env);
+function resolveWebDist(): WebDist {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
+    process.env.WEB_DIST_DIR, // 显式指定优先
     path.resolve(here, '../../web/dist'),
     path.resolve(here, '../../../web/dist'),
   ];
   for (const c of candidates) {
-    if (fs.existsSync(path.join(c, 'index.html'))) return c;
+    if (!c) continue;
+    const root = path.resolve(c);
+    const idx = path.join(root, 'index.html');
+    if (fs.existsSync(idx)) {
+      try {
+        return { root, indexHtml: fs.readFileSync(idx) };
+      } catch {
+        /* 读取失败继续尝试下一个候选 */
+      }
+    }
   }
-  return null;
+  return { root: null, indexHtml: null };
 }
 
 export function buildApp(db: Db, opts: BuildAppOpts = {}) {
@@ -145,12 +173,26 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
       'X-XSS-Protection': '1; mode=block',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+      /**
+       * 跨源隔离纵深：COOP same-origin 防止恶意站点通过 window.opener 控制本页，
+       * CORP same-origin 阻止其他源加载本域资源（响应体仅限同源/同站消费）。
+       */
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Resource-Policy': 'same-origin',
       /** 回显请求追踪 ID（客户端可传 X-Request-Id 覆盖），便于前后端联调定位 */
       'X-Request-Id': req.id,
-      /** API 响应默认禁止缓存，避免鉴权数据（报告/手机号/订单）落入代理或浏览器缓存 */
-      'Cache-Control': 'no-store',
     });
+    // API 响应含鉴权/报告/手机号/订单等敏感数据，一律禁止缓存；
+    // 静态资源与 SPA 入口的缓存策略由 @fastify/static 的 setHeaders 与 notFoundHandler 分级设置，
+    // 使内容哈希资源可长缓存、入口文件可即时更新。
+    if (req.url.split('?')[0].startsWith('/api')) {
+      reply.header('Cache-Control', 'no-store');
+    }
   });
+
+  /** 响应压缩（仅 gzip，体积达标才压缩） */
+  registerCompression(app);
 
   /** 未捕获异常统一收敛为 ApiResp JSON，避免暴露 HTML/堆栈给客户端；服务端保留完整错误日志 */
   app.setErrorHandler((err: unknown, req, reply) => {
@@ -169,9 +211,40 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   });
 
   /** 未知 API 路由统一返回 ApiResp 结构（而非 Fastify 默认纯文本 404）；非 API 路径回退到前端 SPA index.html */
-  const webDist = resolveWebDist();
+  // webDistDir 为测试注入（自建临时 dist）；生产走 resolveWebDist()（含 index.html 内存常驻）
+  const webDistInfo = opts.webDistDir
+    ? (() => {
+        let indexHtml: Buffer | null = null;
+        try {
+          indexHtml = fs.readFileSync(path.join(opts.webDistDir as string, 'index.html'));
+        } catch {
+          /* 临时目录无入口文件时保持 null，仅托管静态资源 */
+        }
+        return { root: opts.webDistDir as string, indexHtml };
+      })()
+    : resolveWebDist();
+  const { root: webDist, indexHtml } = webDistInfo;
   if (webDist) {
-    app.register(fastifyStatic, { root: webDist, prefix: '/', wildcard: false });
+    app.register(fastifyStatic, {
+      root: webDist,
+      prefix: '/',
+      wildcard: false,
+      // 启用条件请求（ETag / Last-Modified），命中时返回 304 节省带宽
+      etag: true,
+      lastModified: true,
+      setHeaders: (reply, filePath) => {
+        // 内容哈希资源（/assets/*）文件名含哈希，可永久不可变缓存；
+        // index.html 等入口文件需每次重验证，保证发版后立即生效。
+        const base = path.basename(filePath);
+        if (base === 'index.html') {
+          reply.header('Cache-Control', 'no-cache');
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          reply.header('Cache-Control', 'no-cache');
+        }
+      },
+    });
     app.log.info({ dir: webDist }, '已托管前端静态资源');
   } else {
     app.log.warn('未找到前端构建产物，仅提供 API 服务');
@@ -181,8 +254,10 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     if (pathname.startsWith('/api')) {
       return reply.code(404).send(fail(404, `接口不存在：${pathname}`));
     }
-    if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {
-      return reply.type('text/html').send(fs.readFileSync(path.join(webDist, 'index.html')));
+    // SPA 兜底：未知前端路由统一回退 index.html（内存常驻，避免每次导航读盘）
+    if (indexHtml) {
+      reply.header('Cache-Control', 'no-cache');
+      return reply.type('text/html').send(indexHtml);
     }
     return reply.code(404).send({ code: 404, msg: 'Not Found', data: null });
   });
@@ -203,9 +278,8 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     return payload;
   });
 
-  app.get('/api/health', async () => {
-    let dbOk = true;
-    let dbSizeBytes = 0;
+  /** 数据库健康探测：聚合探针与就绪探针复用，避免重复样板 */
+  const dbHealth = (): { ok: boolean; sizeBytes: number } => {
     try {
       db.prepare('SELECT 1 AS ok').get();
       const sizeRow = db
@@ -213,12 +287,20 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
           'SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()',
         )
         .get() as { bytes?: number };
-      dbSizeBytes = Number(sizeRow?.bytes) || 0;
+      return { ok: true, sizeBytes: Number(sizeRow?.bytes) || 0 };
     } catch {
-      dbOk = false;
+      return { ok: false, sizeBytes: 0 };
     }
+  };
+
+  /**
+   * 聚合健康检查（向后兼容）：docker healthcheck 与既有契约使用。
+   * DB 不可达时返回 503，便于编排层判定实例不健康。
+   */
+  app.get('/api/health', async (_req, reply) => {
+    const { ok: dbOk, sizeBytes: dbSizeBytes } = dbHealth();
     const mem = process.memoryUsage();
-    return {
+    const body = {
       ok: dbOk,
       name: 'fate-engine',
       version: '0.1.0',
@@ -230,7 +312,36 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       dbSizeMB: Math.round(dbSizeBytes / 1024 / 1024),
       time: new Date().toISOString(),
     };
+    if (!dbOk) {
+      reply.code(503);
+    }
+    return body;
   });
+
+  /**
+   * 存活探针（liveness）：进程可达即 200，不做依赖检查，轻量高频。
+   * 编排层据此判定是否重启容器，与就绪探针解耦避免 DB 抖动误杀进程。
+   */
+  app.get('/api/health/live', async () => ({ ok: true, time: new Date().toISOString() }));
+
+  /**
+   * 就绪探针（readiness）：DB 可达才 200，否则 503。
+   * 编排层据此摘流——不可用实例不接收新请求，但仍存活等待恢复。
+   */
+  app.get('/api/health/ready', async (_req, reply) => {
+    const { ok: dbOk, sizeBytes } = dbHealth();
+    if (!dbOk) {
+      reply.code(503);
+    }
+    return {
+      ok: dbOk,
+      dbSizeMB: Math.round(sizeBytes / 1024 / 1024),
+      time: new Date().toISOString(),
+    };
+  });
+
+  /** OpenAPI 契约：机器可读 API 文档（模块级惰性缓存，文档静态不变） */
+  app.get('/api/openapi.json', async () => cachedOpenApiDoc());
 
   /** L1 城市检索（前端录入页自动补全） */
   app.get('/api/v1/locations/search', async (req) => {
@@ -253,7 +364,7 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   calculateRoutes(app, repos);
   orderRoutes(app, repos);
   planRoutes(app, repos);
-  kernelRoutes(app, repos);
+  kernelRoutes(app, repos, { adminToken: opts.adminToken ?? config.adminToken });
   statsRoutes(app, repos);
 
   return app;

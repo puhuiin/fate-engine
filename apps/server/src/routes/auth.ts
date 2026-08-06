@@ -24,7 +24,7 @@ export function authRoutes(
       const { nickname } = assertSchema(guestSchema, req.body ?? {});
       const userId = repos.users.insertGuest(nickname ?? '游客');
       const user = repos.users.findById(userId);
-      return reply.send(ok({ user, token: signToken(userId) }, '游客登录成功'));
+      return reply.send(ok({ user, token: signToken(userId, 'guest') }, '游客登录成功'));
     },
   );
 
@@ -39,21 +39,28 @@ export function authRoutes(
       if (recent) {
         throw new ApiError(429, '验证码发送频繁，请 60 秒后再试');
       }
+      // 每日限额：同一手机号 24 小时内发送条数上限，防短信轰炸
+      const sinceDay = new Date(Date.now() - 24 * 60 * 60 * 1000)
+        .toISOString()
+        .replace('T', ' ')
+        .slice(0, 19);
+      if (repos.sms.countSentSince(phone, sinceDay) >= config.smsDailyMax) {
+        throw new ApiError(429, '该手机号 24 小时内发送次数已达上限');
+      }
       // 重发窗口已过：作废历史未用验证码，避免同一手机号同时存在多个有效码
       repos.sms.invalidateAllUnused(phone);
 
       const code = String(crypto.randomInt(100000, 1000000));
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
-        .toISOString()
-        .replace('T', ' ')
-        .slice(0, 19);
+      const ttlMs = config.smsCodeTtlMs;
+      const expiresAt = new Date(Date.now() + ttlMs).toISOString().replace('T', ' ').slice(0, 19);
       repos.sms.insert(phone, code, expiresAt, channel);
 
+      const expiresInSec = Math.round(ttlMs / 1000);
       const devMode = process.env.NODE_ENV !== 'production';
       return reply.send(
         ok(
-          { sent: true, ...(devMode ? { devCode: code, expiresIn: 600 } : {}) },
-          '验证码已发送（10 分钟内有效）',
+          { sent: true, ...(devMode ? { devCode: code, expiresIn: expiresInSec } : {}) },
+          `验证码已发送（${expiresInSec} 秒内有效）`,
         ),
       );
     },
@@ -94,26 +101,23 @@ export function authRoutes(
         throw new ApiError(500, '用户创建失败');
       }
       // 游客数据迁移：登录成功后，将游客 token 对应账号的档案/测算记录/订单转入本账号。
-      // 事务保证一致性；guest 与手机号同源时跳过；无数据或已合并时静默返回 0。
+      // 安全约束：仅接受类型位为 guest 的 token；目标账号必须是未绑定手机号的纯游客，
+      // 防止借用任意登录用户 token 批量转移他人数据；合并完成后删除游客空壳账号使旧 token 失效。
+      // 事务在 users.mergeGuestInto 内保证一致性；无数据或已合并时静默返回 0。
       let mergedArchives = 0;
       let mergedRecords = 0;
       if (mergeGuestToken) {
         const guest = verifyToken(mergeGuestToken);
-        if (guest && guest.userId !== user.id) {
-          const tx = repos.db.transaction(() => {
-            const arch = repos.db
-              .prepare('UPDATE user_birth_archive SET user_id = ? WHERE user_id = ?')
-              .run(user.id, guest.userId);
-            const rec = repos.db
-              .prepare('UPDATE calculate_record SET user_id = ? WHERE user_id = ?')
-              .run(user.id, guest.userId);
-            repos.db
-              .prepare('UPDATE order_pay SET user_id = ? WHERE user_id = ?')
-              .run(user.id, guest.userId);
-            mergedArchives = Number(arch.changes);
-            mergedRecords = Number(rec.changes);
-          });
-          tx();
+        if (guest && guest.type === 'guest' && guest.userId !== user.id) {
+          const target = repos.users.findById<{ register_channel: string; phone: string | null }>(
+            guest.userId,
+            'id, register_channel, phone',
+          );
+          if (target && target.register_channel === 'guest' && target.phone === null) {
+            const merged = repos.users.mergeGuestInto(user.id, guest.userId);
+            mergedArchives = merged.archives;
+            mergedRecords = merged.records;
+          }
         }
       }
       return reply.send(

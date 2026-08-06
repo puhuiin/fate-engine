@@ -22,7 +22,7 @@ describe('ErrorBoundary 全局错误边界', () => {
       </ErrorBoundary>,
     );
     expect(screen.getByText('正常内容')).toBeInTheDocument();
-    expect(screen.queryByText(/页面渲染出错/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/页面出错了/)).not.toBeInTheDocument();
   });
 
   it('子组件抛错时展示兜底并允许重试', () => {
@@ -33,7 +33,8 @@ describe('ErrorBoundary 全局错误边界', () => {
           <Broken />
         </ErrorBoundary>,
       );
-      expect(screen.getByText(/页面渲染出错/)).toBeInTheDocument();
+      expect(screen.getByText(/页面出错了/)).toBeInTheDocument();
+      expect(screen.getByText('boom')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: '返回首页' })).toBeInTheDocument();
     } finally {

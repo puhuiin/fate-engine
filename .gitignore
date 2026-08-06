@@ -25,5 +25,6 @@ apps/web/vite.config.d.ts
 # Docker
 apps/server/data/
 
-# CI workflow（本地模板就绪；推送需具备 workflow scope 的 token，故不纳入版本控制）
+# CI workflow（本地模板就绪，位于 .github/workflows/ci.yml；
+# 当前推送 token 无 workflow scope 无法写入远端，故暂不纳入版本控制）
 .github/workflows/

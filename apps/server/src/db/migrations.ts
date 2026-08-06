@@ -82,7 +82,9 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 `;
 
-/** 应用所有未执行的迁移，返回本次实际应用的版本列表 */
+/** 应用所有未执行的迁移，返回本次实际应用的版本列表。
+ *  每个迁移与其版本记录在同一事务内执行：迁移失败整体回滚，
+ *  避免「DDL 已变更但版本未登记」的半应用状态（下次启动重跑时会因列已存在而报错）。 */
 export function runMigrations(db: Db): number[] {
   db.exec(SCHEMA_MIGRATIONS_DDL);
   const appliedVersions = new Set(
@@ -92,10 +94,13 @@ export function runMigrations(db: Db): number[] {
   );
   const appliedNow: number[] = [];
   const apply = db.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)');
-  for (const m of [...MIGRATIONS].sort((a, b) => a.version - b.version)) {
-    if (appliedVersions.has(m.version)) continue;
+  const applyOne = db.transaction((m: Migration) => {
     m.up(db);
     apply.run(m.version, m.name);
+  });
+  for (const m of [...MIGRATIONS].sort((a, b) => a.version - b.version)) {
+    if (appliedVersions.has(m.version)) continue;
+    applyOne(m);
     appliedNow.push(m.version);
   }
   return appliedNow;

@@ -35,6 +35,9 @@ export interface ReportDataState {
 /**
  * 报告页数据层 hook：集中管理九层报告、解锁状态、改运计划与风险项的加载与变更，
  * 将异步状态机从 UI 组件中剥离，组件只负责渲染。
+ *
+ * 竞态防护：recordId 变化/组件卸载时通过 AbortController 取消在途请求，
+ * 防止旧记录的慢响应覆盖新记录数据。
  */
 export function useReportData(recordId: number) {
   const [data, setData] = useState<ReportDataState>({
@@ -59,44 +62,62 @@ export function useReportData(recordId: number) {
   const [unlockError, setUnlockError] = useState('');
   const [loadError, setLoadError] = useState('');
 
-  const refreshPlansRisks = useCallback(async () => {
-    const [pl, rk] = await Promise.all([getPlans(recordId), getRisks(recordId)]);
-    if (pl.data) setPlans(pl.data.plans);
-    if (rk.data) setRisks(rk.data.risks);
-  }, [recordId]);
+  const refreshPlansRisks = useCallback(
+    async (signal?: AbortSignal) => {
+      const [pl, rk] = await Promise.all([
+        getPlans(recordId, { signal }),
+        getRisks(recordId, { signal }),
+      ]);
+      if (signal?.aborted) return;
+      if (pl.data) setPlans(pl.data.plans);
+      if (rk.data) setRisks(rk.data.risks);
+    },
+    [recordId],
+  );
 
-  const reload = useCallback(async () => {
-    const res = await getRecord(recordId);
-    if (res.code !== 200) throw new Error(res.msg || '记录不存在或无权访问');
-    if (res.data?.dataError) throw new Error('该记录报告数据异常，请返回记录列表重新测算');
-    const r = res.data?.report;
-    setData({
-      l1: r?.l1 ?? null,
-      l2: r?.l2 ?? null,
-      l3: r?.l3 ?? null,
-      l4: r?.l4 ?? null,
-      l5: r?.l5 ?? null,
-      l6: r?.l6 ?? null,
-      l7: r?.l7 ?? null,
-      l8: r?.l8 ?? null,
-      l9: r?.l9 ?? null,
-    });
-    setPaidStatus(res.data?.paidStatus ?? 0);
-    if (res.data?.calc_type) setCalcType(String(res.data.calc_type));
-    if (res.data?.archive_id && res.data.archive_id > 0) setArchiveId(res.data.archive_id);
-    setLoadError('');
-    return res;
-  }, [recordId]);
+  const reload = useCallback(
+    async (signal?: AbortSignal) => {
+      const res = await getRecord(recordId, { signal });
+      // 请求已返回但所属记录已被切换/卸载：丢弃结果，防止旧记录覆盖新记录
+      if (signal?.aborted) return;
+      if (res.code !== 200) throw new Error(res.msg || '记录不存在或无权访问');
+      if (res.data?.dataError) throw new Error('该记录报告数据异常，请返回记录列表重新测算');
+      const r = res.data?.report;
+      setData({
+        l1: r?.l1 ?? null,
+        l2: r?.l2 ?? null,
+        l3: r?.l3 ?? null,
+        l4: r?.l4 ?? null,
+        l5: r?.l5 ?? null,
+        l6: r?.l6 ?? null,
+        l7: r?.l7 ?? null,
+        l8: r?.l8 ?? null,
+        l9: r?.l9 ?? null,
+      });
+      setPaidStatus(res.data?.paidStatus ?? 0);
+      if (res.data?.calc_type) setCalcType(String(res.data.calc_type));
+      if (res.data?.archive_id && res.data.archive_id > 0) setArchiveId(res.data.archive_id);
+      setLoadError('');
+      return res;
+    },
+    [recordId],
+  );
 
   const unlock = useCallback(
     async (channel: string = 'wechat') => {
       setUnlocking(true);
       setUnlockError('');
       try {
-        const o = await createUnlockOrder(recordId);
+        let o = await createUnlockOrder(recordId);
         if (o.code !== 200) throw new Error(o.msg || '创建解锁订单失败，请稍后重试');
         if (!o.data.alreadyUnlocked) {
-          const pay = await payOrder(o.data.order.id, channel);
+          let pay = await payOrder(o.data.order.id, channel);
+          // 订单因超时过期：重建订单并重试支付一次（避免用户多等一轮）
+          if (pay.code === 410) {
+            o = await createUnlockOrder(recordId);
+            if (o.code !== 200) throw new Error(o.msg || '创建解锁订单失败，请稍后重试');
+            pay = await payOrder(o.data.order.id, channel);
+          }
           if (pay.code !== 200) throw new Error(pay.msg || '支付失败，请稍后重试');
         }
         await reload();
@@ -115,8 +136,11 @@ export function useReportData(recordId: number) {
     setPlans((cur) => cur.map((p) => (p.id === plan.id ? { ...p, status: next } : p)));
     try {
       const res = await patchPlan(plan.id, { status: next });
-      if (res.data) {
+      if (res.code === 200 && res.data) {
         setPlans((cur) => cur.map((p) => (p.id === plan.id ? res.data : p)));
+      } else {
+        // 非 200 或响应缺数据：回滚乐观更新
+        setPlans((cur) => cur.map((p) => (p.id === plan.id ? { ...p, status: plan.status } : p)));
       }
     } catch {
       setPlans((cur) => cur.map((p) => (p.id === plan.id ? { ...p, status: plan.status } : p)));
@@ -141,16 +165,19 @@ export function useReportData(recordId: number) {
   );
 
   useEffect(() => {
+    const ctrl = new AbortController();
     (async () => {
       try {
-        await reload();
-        await refreshPlansRisks();
+        // 报告与计划/风险无依赖，并行加载省一个 RTT（二者均接受 signal 并在中止时丢弃结果）
+        await Promise.all([reload(ctrl.signal), refreshPlansRisks(ctrl.signal)]);
       } catch (e) {
+        if (ctrl.signal.aborted) return;
         setLoadError(e instanceof Error ? e.message : '报告加载失败，请刷新重试');
       } finally {
-        setLoading(false);
+        if (!ctrl.signal.aborted) setLoading(false);
       }
     })();
+    return () => ctrl.abort();
   }, [reload, refreshPlansRisks]);
 
   return {

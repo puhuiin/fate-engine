@@ -5,12 +5,21 @@
  */
 import { createDb } from '../src/db/client.js';
 import { buildApp } from '../src/app.js';
+import { decompress, decompressBrotli } from '../src/lib/compress.js';
 import { createRepos } from '../src/db/repo/index.js';
 import { startOrderExpiryTask } from '../src/jobs/expireOrders.js';
+import { runDataCleanup } from '../src/jobs/dataCleanup.js';
 import type { FastifyInstance } from 'fastify';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const db = createDb(':memory:');
-const app: FastifyInstance = buildApp(db, { logger: false, rateLimit: false });
+const app: FastifyInstance = buildApp(db, {
+  logger: false,
+  rateLimit: false,
+  adminToken: 'verify-admin-token',
+});
 
 interface Resp {
   status: number;
@@ -24,13 +33,21 @@ interface Resp {
 async function call(
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   url: string,
-  opts: { body?: unknown; token?: string; remoteAddress?: string } = {},
+  opts: {
+    body?: unknown;
+    token?: string;
+    remoteAddress?: string;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<Resp> {
   const res = await app.inject({
     method,
     url,
     payload: opts.body,
-    headers: opts.token ? { authorization: `Bearer ${opts.token}` } : {},
+    headers: {
+      ...(opts.headers ?? {}),
+      ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
+    },
     ...(opts.remoteAddress ? { remoteAddress: opts.remoteAddress } : {}),
   });
   return { status: res.statusCode, json: res.json() as Resp['json'] };
@@ -541,9 +558,27 @@ const listMergedRec = await call('GET', '/api/v1/records', { token: tokenMerged 
 check(
   '合并后手机号账号可见游客记录',
   listMergedRec.status === 200 &&
-    (listMergedRec.json.data as Array<{ archive_id: number }>).some(
+    (listMergedRec.json.data as { list?: Array<{ archive_id: number }> }).list?.some(
       (r) => r.archive_id === archiveM,
-    ),
+    ) === true,
+);
+
+const afterMergeGuest = await call('GET', '/api/v1/archives', { token: tokenM });
+check(
+  '合并后旧游客账号已删除（token 失效）',
+  afterMergeGuest.status === 200 && (afterMergeGuest.json.data as unknown[]).length === 0,
+);
+
+const smsX = await call('POST', '/api/v1/auth/sms/send', {
+  body: { phone: '13655554444', channel: 'login' },
+});
+const codeX = smsX.json.data?.devCode as string;
+const phX = await call('POST', '/api/v1/auth/phone', {
+  body: { phone: '13655554444', code: codeX, mergeGuestToken: tokenMerged },
+});
+check(
+  'phone 类型 token 不能触发游客合并',
+  phX.status === 200 && Number(phX.json.data?.merged?.records) === 0,
 );
 
 // ---------- 10. 越权防护：B 访问 A 的资源 → 404 ----------
@@ -609,10 +644,10 @@ check(
 );
 const pageNoArg = await call('GET', `/api/v1/records`, { token: tokenA });
 check(
-  '不分页时保持数组语义兼容',
+  '不分页时统一返回分页结构（list 语义兼容）',
   pageNoArg.status === 200 &&
-    Array.isArray(pageNoArg.json.data) &&
-    (pageNoArg.json.data as unknown[]).length >= 2,
+    !Array.isArray(pageNoArg.json.data) &&
+    (pageNoArg.json.data as { list?: unknown[] }).list?.length >= 2,
 );
 const pageClamp = await call('GET', '/api/v1/records?page=999&pageSize=9999', { token: tokenA });
 check(
@@ -633,7 +668,7 @@ check(
   'pageSize 小数不 500，floor 为整数',
   pageFloat.status === 200 && pageFloat.json.data?.pageSize === 2,
 );
-const listRec = (pageNoArg.json.data as Array<Record<string, unknown>>)[0];
+const listRec = ((pageNoArg.json.data as { list?: Array<Record<string, unknown>> }).list ?? [])[0];
 check(
   '记录列表不含内部 user_id/raw_json 字段',
   listRec?.user_id === undefined && listRec?.raw_json === undefined,
@@ -669,17 +704,28 @@ check(
 );
 
 // ---------- 13. 内核日志 ----------
+const klDenied = await call('POST', '/api/v1/kernel/log', {
+  token: tokenA,
+  body: { version: 'V16', ruleName: 'no-admin', ruleDetail: '' },
+});
+check('内核审计无管理员令牌 403', klDenied.status === 403 && klDenied.json.code === 403);
+
 const kl = await call('POST', '/api/v1/kernel/log', {
   token: tokenA,
+  headers: { 'x-admin-token': 'verify-admin-token' },
   body: { version: 'V16', ruleName: 'verify_api', ruleDetail: '接口层回归校验' },
 });
-check('内核迭代日志写入', kl.status === 200 && kl.json.data?.version === 'V16');
+check('内核迭代日志写入（管理员令牌）', kl.status === 200 && kl.json.data?.version === 'V16');
 
-const klq = await call('GET', '/api/v1/kernel/logs?version=V16', { token: tokenA });
+const klq = await call('GET', '/api/v1/kernel/logs?version=V16', {
+  token: tokenA,
+  headers: { 'x-admin-token': 'verify-admin-token' },
+});
 check('按版本查询内核日志', klq.status === 200 && (klq.json.data as unknown[]).length === 1);
 
 const klOver = await call('POST', '/api/v1/kernel/log', {
   token: tokenA,
+  headers: { 'x-admin-token': 'verify-admin-token' },
   body: { version: 'V16', ruleName: 'x'.repeat(51), ruleDetail: '' },
 });
 check('kernel 超长 ruleName 拒绝 400', klOver.status === 400 && klOver.json.code === 400);
@@ -784,6 +830,81 @@ const bareBearer = await app.inject({
   headers: { authorization: 'Bearer   ' },
 });
 check('空 Bearer token 401', bareBearer.statusCode === 401 && bareBearer.json().code === 401);
+
+// 14.6 基础安全响应头（nosniff / DENY / no-referrer / Permissions-Policy / 跨源隔离）
+const secRes = await app.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+check(
+  '安全响应头 nosniff/DENY/no-referrer/XSS 齐备',
+  secRes.headers['x-content-type-options'] === 'nosniff' &&
+    secRes.headers['x-frame-options'] === 'DENY' &&
+    secRes.headers['referrer-policy'] === 'no-referrer' &&
+    secRes.headers['x-xss-protection'] === '1; mode=block',
+);
+check(
+  'Permissions-Policy 默认禁相机/麦克风/定位/支付',
+  (secRes.headers['permissions-policy'] ?? '').includes('camera=()') &&
+    (secRes.headers['permissions-policy'] ?? '').includes('geolocation=()') &&
+    (secRes.headers['permissions-policy'] ?? '').includes('payment=()'),
+);
+check(
+  '跨源隔离 COOP/CORP 为 same-origin',
+  secRes.headers['cross-origin-opener-policy'] === 'same-origin' &&
+    secRes.headers['cross-origin-resource-policy'] === 'same-origin',
+);
+
+// 14.7 响应 gzip 压缩：大响应按 Accept-Encoding 压缩，小响应不压缩
+const gzDb = createDb(':memory:');
+const gzApp: FastifyInstance = buildApp(gzDb, { logger: false, rateLimit: false });
+const gzLogin = await gzApp.inject({ method: 'POST', url: '/api/v1/auth/guest', payload: {} });
+const gzToken = (gzLogin.json() as { data: { token: string } }).data.token;
+const gzArc = await gzApp.inject({
+  method: 'POST',
+  url: '/api/v1/archives',
+  payload: {
+    gender: 'male',
+    solarDate: '1990-06-15',
+    solarTime: '14:30',
+    cityName: '北京',
+    timePrecision: 'minute',
+    sourceReliability: 'certificate',
+  },
+  headers: { authorization: `Bearer ${gzToken}` },
+});
+const gzArcId = (gzArc.json() as { data: { id: number } }).data.id;
+const gzCalc = await gzApp.inject({
+  method: 'POST',
+  url: '/api/v1/calculate',
+  payload: { archiveId: gzArcId, calcType: 'standard' },
+  headers: { authorization: `Bearer ${gzToken}` },
+});
+const gzRecId = (gzCalc.json() as { data: { recordId: number } }).data.recordId;
+const gzHit = await gzApp.inject({
+  method: 'GET',
+  url: `/api/v1/records/${gzRecId}`,
+  headers: { authorization: `Bearer ${gzToken}`, 'accept-encoding': 'gzip' },
+});
+check('gzip：大响应压缩返回 content-encoding: gzip', gzHit.headers['content-encoding'] === 'gzip');
+const gzJson = JSON.parse(await decompress(Buffer.from(gzHit.rawPayload))) as { code: number };
+check('gzip：解压后 JSON 完整可解析', gzJson.code === 200);
+const gzSmall = await gzApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+check(
+  'gzip：小响应不压缩（无 content-encoding）',
+  gzSmall.headers['content-encoding'] === undefined,
+);
+const gzNoAcc = await gzApp.inject({ method: 'GET', url: '/api/v1/locations/search?q=bei' });
+check('gzip：未声明 accept-encoding 不压缩', gzNoAcc.headers['content-encoding'] === undefined);
+// 14.7b 响应 brotli 压缩：客户端声明 br 时优先于 gzip
+const brHit = await gzApp.inject({
+  method: 'GET',
+  url: `/api/v1/records/${gzRecId}`,
+  headers: { authorization: `Bearer ${gzToken}`, 'accept-encoding': 'gzip, br' },
+});
+check('brotli：声明 br 优先返回 content-encoding: br', brHit.headers['content-encoding'] === 'br');
+const brJson = JSON.parse(await decompressBrotli(Buffer.from(brHit.rawPayload))) as {
+  code: number;
+};
+check('brotli：解压后 JSON 完整可解析', brJson.code === 200);
+gzDb.close();
 
 // ---------- 15. trustProxy：反向代理后按真实客户端 IP 限流分桶 ----------
 // 15.1 开启 trustProxy：X-Forwarded-For 决定分桶，不同真实 IP 桶互不影响
@@ -923,6 +1044,18 @@ const idEcho = await app.inject({
 });
 check('客户端传入 X-Request-Id 被透传回显', idEcho.headers['x-request-id'] === 'trace-abc-123');
 
+// ---------- 11.8 健康分级探针：liveness 不依赖 DB、readiness 依赖 DB ----------
+const liveProbe = await app.inject({ method: 'GET', url: '/api/health/live' });
+check('存活探针 /api/health/live 返回 200', liveProbe.statusCode === 200);
+check('存活探针返回 ok:true', (liveProbe.json() as { ok?: boolean }).ok === true);
+const readyProbe = await app.inject({ method: 'GET', url: '/api/health/ready' });
+check('就绪探针 /api/health/ready DB 正常返回 200', readyProbe.statusCode === 200);
+const readyBody = readyProbe.json() as { ok?: boolean; dbSizeMB?: number };
+check(
+  '就绪探针返回 ok:true 与 dbSizeMB',
+  readyBody.ok === true && typeof readyBody.dbSizeMB === 'number',
+);
+
 // ---------- 12. 统计看板 + 个人资料编辑 ----------
 const stats = await call('GET', '/api/v1/stats/overview', { token: tokenA });
 const statsD = stats.json.data as Record<string, number | string> | null;
@@ -1020,6 +1153,100 @@ const zombieAfter = db
   .prepare('SELECT entitlement_status FROM order_pay WHERE id = ?')
   .get(zombieId) as { entitlement_status: string };
 check('订单过期批量清理任务作废旧单', zombieAfter.entitlement_status === 'expired');
+
+// ---------- 14. 静态托管缓存策略 ----------
+// 自建临时 dist，验证静态资源缓存头与 SPA 回退（不依赖前端构建产物）
+const tmpDist = fs.mkdtempSync(path.join(os.tmpdir(), 'fate-verify-dist-'));
+fs.mkdirSync(path.join(tmpDist, 'assets'), { recursive: true });
+fs.writeFileSync(path.join(tmpDist, 'index.html'), '<!doctype html><html><body>app</body></html>');
+fs.writeFileSync(path.join(tmpDist, 'assets', 'index-a1b2c3.js'), 'console.log(1)');
+const staticDb = createDb(':memory:');
+const staticApp = buildApp(staticDb, {
+  logger: false,
+  rateLimit: false,
+  webDistDir: tmpDist,
+});
+const spaHome = await staticApp.inject({ method: 'GET', url: '/' });
+check(
+  '静态托管 index.html 不缓存（Cache-Control: no-cache）',
+  spaHome.statusCode === 200 &&
+    String(spaHome.headers['cache-control']).toLowerCase().includes('no-cache'),
+);
+const hashAsset = await staticApp.inject({ method: 'GET', url: '/assets/index-a1b2c3.js' });
+check(
+  'hash 静态资源强缓存（max-age + immutable）',
+  hashAsset.statusCode === 200 &&
+    String(hashAsset.headers['cache-control']).toLowerCase().includes('immutable'),
+);
+const spaFallback = await staticApp.inject({ method: 'GET', url: '/reports/123' });
+check(
+  '未知非 API 路径回退 SPA index.html',
+  spaFallback.statusCode === 200 &&
+    String(spaFallback.headers['content-type']).includes('text/html'),
+);
+staticApp.close();
+
+// ---------- 16. OpenAPI 契约 + 数据生命周期治理 ----------
+const oaRes = await app.inject({ method: 'GET', url: '/api/openapi.json' });
+const oaDoc = oaRes.json() as {
+  openapi?: string;
+  paths?: Record<string, unknown>;
+  components?: { securitySchemes?: unknown };
+  'x-rate-limit'?: { global?: { max?: number } };
+};
+check(
+  'OpenAPI 契约返回 3.0 且含核心端点与鉴权方案',
+  oaRes.statusCode === 200 &&
+    oaDoc.openapi === '3.0.3' &&
+    typeof oaDoc.paths?.['/api/v1/orders'] === 'object' &&
+    typeof oaDoc.paths?.['/api/v1/orders/{id}/cancel'] === 'object' &&
+    typeof oaDoc.paths?.['/api/v1/auth/guest'] === 'object' &&
+    oaDoc.components?.securitySchemes !== undefined &&
+    oaDoc['x-rate-limit']?.global?.max === 300,
+);
+
+// 数据治理：独立内存库构造孤儿记录/过期验证码/超期游客，验证 runDataCleanup 全清
+const clDb = createDb(':memory:');
+const clRepos = createRepos(clDb);
+const old = '2000-01-01 00:00:00';
+clRepos.users.insertGuest('保留游客');
+const staleId = clDb
+  .prepare('INSERT INTO sys_user (nickname, register_channel, created_at) VALUES (?, ?, ?)')
+  .run('久客', 'guest', old).lastInsertRowid;
+const staleArchId = clDb
+  .prepare('INSERT INTO user_birth_archive (user_id, solar_date, created_at) VALUES (?, ?, ?)')
+  .run(Number(staleId), '2000-01-01', old).lastInsertRowid;
+clDb
+  .prepare(
+    'INSERT INTO calculate_record (archive_id, user_id, calc_type, status, created_at) VALUES (?, ?, ?, ?, ?)',
+  )
+  .run(Number(staleArchId), Number(staleId), 'standard', 'pending', old);
+clDb
+  .prepare(
+    "INSERT INTO sms_code (phone, code, expires_at) VALUES ('13800000000', '0000', '2000-01-01 00:00:00')",
+  )
+  .run();
+clDb.pragma('foreign_keys = OFF');
+clDb
+  .prepare(
+    'INSERT INTO calculate_record (archive_id, user_id, calc_type, status) VALUES (99999, 99999, ?, ?)',
+  )
+  .run('standard', 'pending');
+clDb.pragma('foreign_keys = ON');
+const clStats = runDataCleanup(clRepos);
+check(
+  '数据治理清掉孤儿记录/过期验证码/超期游客',
+  clStats.orphanRecords === 1 &&
+    clStats.expiredSms === 1 &&
+    clStats.staleGuests === 1 &&
+    (clDb.prepare('SELECT COUNT(*) AS n FROM calculate_record').get() as { n: number }).n === 0 &&
+    (
+      clDb
+        .prepare('SELECT COUNT(*) AS n FROM sys_user WHERE register_channel = ?')
+        .get('guest') as { n: number }
+    ).n === 1,
+);
+clDb.close();
 
 db.close();
 

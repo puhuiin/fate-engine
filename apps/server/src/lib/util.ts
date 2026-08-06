@@ -26,14 +26,18 @@ export function fail(code: number, msg: string): ApiResp {
   return { code, msg, data: null, timestamp, sign };
 }
 
-/** 签发 N 秒有效 token（HMAC 签名，无需外部依赖），有效期可经 FATE_TOKEN_TTL_SECONDS 配置 */
-export function signToken(userId: number): string {
-  const payload = `${userId}.${Date.now() + config.tokenTtlSeconds * 1000}`;
+/** 签发 N 秒有效 token（HMAC 签名，无需外部依赖），有效期可经 FATE_TOKEN_TTL_SECONDS 配置。
+ *  payload 携带类型位（guest/phone），用于限制游客合并等敏感操作只能由对应类型 token 触发；
+ *  旧 2 段 token（无类型位）按 phone 处理，保持向后兼容。 */
+export function signToken(userId: number, type: 'guest' | 'phone' = 'phone'): string {
+  const payload = `${userId}.${Date.now() + config.tokenTtlSeconds * 1000}.${type}`;
   const sig = crypto.createHmac('sha256', config.secret).update(payload).digest('hex').slice(0, 24);
   return `${Buffer.from(payload).toString('base64url')}.${sig}`;
 }
 
-export function verifyToken(token?: string): { userId: number } | null {
+export type TokenInfo = { userId: number; type: 'guest' | 'phone' };
+
+export function verifyToken(token?: string): TokenInfo | null {
   if (!token || token.length > config.tokenMaxLength) return null;
   const [b64, sig] = token.split('.');
   if (!b64 || !sig) return null;
@@ -47,12 +51,13 @@ export function verifyToken(token?: string): { userId: number } | null {
   const b = Buffer.from(expect);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   const parts = payload.split('.');
-  if (parts.length !== 2) return null;
+  if (parts.length !== 2 && parts.length !== 3) return null;
   const userId = Number(parts[0]);
   const exp = Number(parts[1]);
   if (!Number.isInteger(userId) || userId <= 0 || !Number.isInteger(exp)) return null;
   if (exp < Date.now()) return null;
-  return { userId };
+  const type = parts.length === 3 && parts[2] === 'guest' ? 'guest' : 'phone';
+  return { userId, type };
 }
 
 export function maskPhone(phone: string): string {

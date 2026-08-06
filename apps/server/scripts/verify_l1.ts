@@ -68,6 +68,37 @@ for (const c of cases) {
     `${ok ? 'PASS' : 'FAIL'}  ${c.name} → 真太阳时 ${r.timeCorrection.trueSolarHours.toFixed(2)}（期望 ${c.expect.trueSolarHours}±${c.tol}）${r.shichen.name} ${r.lunar.dayGanZhi}日`,
   );
 }
+
+// 边界用例：闰年 2/29（历法真实性）与夏令时实施期（1986-1991 时钟回拨 1 小时）
+const leap = runL1({
+  solarDate: '2004-02-29',
+  solarTime: '12:00',
+  cityName: '北京',
+  timezoneOffset: 8,
+  timePrecision: 'minute',
+  sourceReliability: 'certificate',
+});
+const leapOk =
+  Math.abs(leap.timeCorrection.trueSolarHours - 11.543) <= 0.02 && leap.lunar.dayGanZhi === '戊寅';
+if (!leapOk) failed++;
+console.log(
+  `${leapOk ? 'PASS' : 'FAIL'}  闰年 2004-02-29 12:00 北京 → 真太阳时 ${leap.timeCorrection.trueSolarHours.toFixed(2)} 戊寅日`,
+);
+
+const dst = runL1({
+  solarDate: '1987-05-01',
+  solarTime: '12:00',
+  cityName: '北京',
+  timezoneOffset: 8,
+  timePrecision: 'minute',
+  sourceReliability: 'certificate',
+});
+const dstOk = dst.dstAdjustment.applied && dst.dstAdjustment.adjusted === '1987-05-01 11:00';
+if (!dstOk) failed++;
+console.log(
+  `${dstOk ? 'PASS' : 'FAIL'}  夏令时 1987-05-01 12:00 北京 → 校正 ${dst.dstAdjustment.original} → ${dst.dstAdjustment.adjusted}`,
+);
+
 if (failed > 0) {
   console.error(`${failed} 个用例失败`);
   process.exit(1);

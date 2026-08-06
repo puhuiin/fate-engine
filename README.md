@@ -33,6 +33,9 @@
 - **内核迭代留痕**：规则调整通过 `kernel_log` 表持久化，可追溯版本演进
 - **导出报告**：前端将九层内容导出为纯文本（含白话导读）
 - **白话解读**：报告顶部「先看这里」三分钟导读，把专业结论翻译成客户能看懂的大白话；L1/L2 提供「这些词是什么意思？」术语对照折叠表
+- **前端性能**：路由级代码分割（React.lazy），首屏只加载测算页；全局 ErrorBoundary + 单层渲染边界，局部异常不白屏
+- **响应压缩**：后端对体积达标的大响应自动 gzip（内置 zlib，零依赖）
+- **纵深安全**：CSP（生产构建注入）+ Permissions-Policy（禁相机/定位/支付）+ nosniff/DENY 等安全响应头；COOP/CORP 同源隔离，阻断跨源窗口接管与跨站资源加载
 - **可观测性**：全链路 `X-Request-Id` 回显 + 访问日志；错误处理器按 4xx/5xx 分级落日志，生产可定位
 
 ---
@@ -43,14 +46,14 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 6 组确定性回归脚本（44 + 8 + 15 + 47 + 132 + 5 = 251 断言）；前端 6 文件 29 用例（含 React 组件测试） |
+| 校验 | 6 组确定性回归脚本（44 + 8 + 15 + 47 + 153 + 5 = 272 断言）；前端 8 文件 47 用例（含 React 组件测试） |
 
 ---
 
 ## 快速开始
 
 ### 环境要求
-- Node.js ≥ 18
+- Node.js ≥ 22（与 Dockerfile / `.nvmrc` 一致；CI 在 Node 22 上跑全量回归）
 - npm ≥ 9
 
 ### 安装与启动
@@ -90,14 +93,14 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（251 断言）
+# 全量回归（272 断言）
 npm run verify -w @fate/server
 
 # 分块验证
 npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时边界（8 用例）
 npm run verify:l2 -w @fate/server   # 八字流派/大运顺逆（15 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（47 断言，含深度模式差异）
-npm run verify:api -w @fate/server  # 接口层（132 断言，内存 SQLite + inject，含取消订单/过期清理/模式筛选）
+npm run verify:api -w @fate/server  # 接口层（153 断言，内存 SQLite + inject，含取消订单/过期清理/模式筛选/静态缓存/OpenAPI）
 npm run verify:migrate -w @fate/server  # 迁移机制（5 断言：新库全量/幂等重跑/旧库补应用）
 
 # 前端测试（纯函数 + React 组件：表格渲染、错误边界、骨架屏）
@@ -166,6 +169,7 @@ npm run test -w @fate/web
 |------|------|------|
 | GET | `/api/health` | 健康检查（`layers` 返回各测算层版本数组） |
 | GET | `/api/v1/locations/search?q=` | 城市经纬度搜索（query 截断 ≤20） |
+| GET | `/api/openapi.json` | OpenAPI 3.0 契约（端点清单 / 鉴权方案 / 限流语义） |
 
 ---
 
@@ -177,12 +181,12 @@ fate-engine/
 │   ├── server/
 │   │   ├── scripts/          # verify_all/l1/l2/l3/api 回归脚本
 │   │   └── src/
-│   │       ├── index.ts      # 入口（生产 FATE_SECRET 强校验；启动/停机挂载订单过期清理任务）
+│   │       ├── index.ts      # 入口（生产 FATE_SECRET 强校验；启动/停机挂载订单过期与数据清理任务）
 │   │       ├── app.ts        # Fastify 组装 + 统一错误处理 + 健康检查
 │   │       ├── config.ts     # zod envSchema 强校验环境变量（非法值启动即拒绝）
 │   │       ├── schema.ts     # zod 输入校验
 │   │       ├── routes/       # auth/archives/calculate/orders/plans/kernel/stats
-│   │       ├── jobs/         # expireOrders.ts 订单过期批量清理定时任务（60s + timer.unref）
+│   │       ├── jobs/         # expireOrders.ts 订单过期清理 + dataCleanup.ts 数据生命周期治理
 │   │       ├── modules/
 │   │       │   ├── l1/       # 时空校正（dst 夏令时 / location / time / rating）
 │   │       │   ├── l2/       # 八字双流派
@@ -221,10 +225,11 @@ fate-engine/
 - **事务一致性**：测算写入（记录 + 计划 + 风险）由外层单一事务包裹，禁止嵌套事务
 - **数据访问分层**：SQL 读写全部收敛到 `db/repo/` Repository 层，路由层只做鉴权、校验与编排；模块层（L1–L9）保持纯计算，落库行映射（`toPlanRows` / `toRiskRows`）由模块层导出
 - **业务错误收敛**：路由统一 `throw ApiError`（`lib/errors.ts`），由全局错误处理器转 `ApiResp`；`lib/http.ts` 提供 `assertSchema` / `requireIdParam` 消除样板
-- **后台任务**：订单过期清理由 `src/jobs/expireOrders.ts` 承担（启动先清一轮 + 60s 定时，`timer.unref` 不阻塞进程退出，优雅停机时清除）
+- **后台任务**：订单过期清理由 `src/jobs/expireOrders.ts` 承担（启动先清一轮 + 60s 定时，`timer.unref` 不阻塞进程退出，优雅停机时清除）；数据生命周期治理由 `src/jobs/dataCleanup.ts` 承担（孤儿记录/过期验证码/超期游客级联清理，周期 `DATA_CLEANUP_MIN` 默认 60 分钟、`FATE_GUEST_TTL_DAYS` 默认 30 天，设 `DATA_CLEANUP_MIN=0` 仅启动清理一次）
+- **API 契约化**：`GET /api/openapi.json` 输出 OpenAPI 3.0 契约（端点/鉴权方案/限流语义），端点与 routes/ 同步登记
 - **Schema 演进**：`db/migrations.ts` 提供版本化迁移（`schema_migrations` 版本表 + 有序幂等迁移），启动自动应用未执行迁移；升级旧库安全可追溯，`npm run db:migrate` 可查看迁移状态
 - **可观测性**：`X-Request-Id` 全链路回显（UUID），访问日志与错误日志带 requestId 与路径；5xx 记录完整堆栈、4xx 记录告警，客户端仅收到收敛文案
-- **缓存策略**：鉴权/动态数据接口统一 `Cache-Control: no-store`，防止敏感数据进入代理缓存
+- **缓存策略**：鉴权/动态数据接口统一 `Cache-Control: no-store`，防止敏感数据进入代理缓存；静态资源分级缓存——带内容 hash 的 Vite 产物 `immutable` 强缓存一年（二次访问零网络往返），`index.html` 与 SPA 路由回退保持 `no-cache`（发布新版本立即生效），兼顾首屏性能与更新及时性
 
 ---
 

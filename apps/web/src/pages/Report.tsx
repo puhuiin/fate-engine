@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useReportData } from '../hooks/useReportData';
 import { useReportExport } from '../hooks/useReportExport';
@@ -15,6 +15,28 @@ import {
   Layer8,
   Layer9,
 } from './report/layers';
+
+/** 单层渲染错误边界：某一层出错仅降级该层，不拖垮整份报告 */
+class LayerBoundary extends Component<{ layer: number; children: ReactNode }, { broken: boolean }> {
+  state = { broken: false };
+  static getDerivedStateFromError(): { broken: boolean } {
+    return { broken: true };
+  }
+  componentDidCatch(err: Error, info: ErrorInfo): void {
+    console.error(`L${this.props.layer} render error:`, err, info.componentStack);
+  }
+  render(): ReactNode {
+    if (this.state.broken) {
+      return (
+        <div className="lock-card">
+          <strong>该层渲染异常</strong>
+          <p>这一层的数据暂时无法展示，不影响其他分层。可刷新页面重试。</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function Report() {
   const { id } = useParams();
@@ -274,7 +296,7 @@ export default function Report() {
         <div
           key={l.layer}
           id={`layer-${l.layer}`}
-          className={`card layer-card ${l.ready ? 'ready' : 'pending'}`}
+          className={`card layer-card ${l.ready ? 'ready' : 'pending'} ${l.locked ? 'layer-locked' : ''}`}
         >
           <div className="layer-head">
             <span className="layer-badge">L{l.layer}</span>
@@ -294,7 +316,7 @@ export default function Report() {
               </button>
             </div>
           ) : (
-            l.el
+            <LayerBoundary layer={l.layer}>{l.el}</LayerBoundary>
           )}
           {!l.ready && (
             <p className="dim">该层属于「{MODULE_HINT[l.layer]}」模块，将在后续阶段接入。</p>
