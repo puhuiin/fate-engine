@@ -73,7 +73,16 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
       l8 = runL8(l4, l5, l2.bazi);
       l9 = runL9(l2.bazi, l4, l5, l7);
     } catch (e) {
-      throw new ApiError(400, e instanceof Error ? e.message : '出生信息不合法，请重新编辑档案');
+      // 区分「输入校验类」与「测算引擎内部异常」：
+      // 出生信息类错误属用户输入问题 → 400 并给友好提示；
+      // 其余异常是引擎缺陷 → 500 并记服务端日志，不把内部堆栈泄漏给客户端。
+      if (e instanceof ApiError) throw e;
+      const msg = e instanceof Error ? e.message : '';
+      if (/非法|不合法|无法|无效|缺失|为空|不支持/.test(msg)) {
+        throw new ApiError(400, '出生信息不合法，请重新编辑档案');
+      }
+      req.log.error({ err: e }, '测算引擎内部异常');
+      throw new ApiError(500, '测算引擎开小差了，请稍后重试');
     }
 
     const report = buildNineLayerReport(l1, l2, l3, l4, l5, l6, l7, l8, l9);
@@ -158,15 +167,13 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
     return ok({ risks: rows, total: rows.length, locked: false });
   });
 
-  /** 测算历史列表（可选分页 page/pageSize 与深度模式 calcType 筛选） */
+  /** 测算历史列表（可选分页 page/pageSize 与深度模式 calcType 筛选）。
+   *  统一返回分页结构 { list, total, page, pageSize, calcType }，
+   *  不再按参数有无切换数组/对象两种形状，客户端契约单一化。 */
   app.get('/api/v1/records', { preHandler: app.authenticate }, async (req) => {
     const { page, pageSize, calcType } = assertSchema(recordsQuerySchema, req.query ?? {});
     const currentPage = page ?? 1;
     const currentSize = pageSize ?? 10;
-    if (page === undefined && pageSize === undefined && calcType === undefined) {
-      const rows = repos.records.listAllByUser(req.userId);
-      return ok(rows);
-    }
     const { rows, total } = repos.records.listByUser(
       req.userId,
       currentPage,

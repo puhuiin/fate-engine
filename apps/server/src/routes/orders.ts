@@ -103,10 +103,7 @@ export function orderRoutes(app: FastifyInstance, repos: Repos): void {
       throw new ApiError(410, '订单已过期，请重新下单');
     }
 
-    const rec = repos.db
-      .prepare('SELECT paid_status FROM calculate_record WHERE id = ?')
-      .get(order.record_id) as { paid_status: number } | undefined;
-    if (rec && rec.paid_status === 1) {
+    if (repos.records.getPaidStatus(order.record_id) === 1) {
       repos.orders.markGrantedById(order.id);
       const granted = repos.orders.findById(order.id);
       return reply.send(

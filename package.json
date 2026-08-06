@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "全域超验无限命运演算系统 · V13 工程化落地（分阶段开发）",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "workspaces": [
     "apps/*"
   ],

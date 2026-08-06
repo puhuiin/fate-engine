@@ -68,6 +68,44 @@ const checks: Array<[string, boolean]> = [
   ['L4 结论强调人为主导', l4.summary.includes('人为')],
 ];
 
+// 排盘边界：晚子时（23:30）日柱不换、早子时（00:30）日柱切换
+const lateL1 = runL1({
+  solarDate: '2002-11-29',
+  solarTime: '23:30',
+  cityName: '北京',
+  timezoneOffset: 8,
+  timePrecision: 'minute',
+  sourceReliability: 'certificate',
+});
+const late = runL2(
+  lateL1.timeCorrection.trueSolarClockTime,
+  'male',
+  lateL1.normalized.timeKnown,
+  CURRENT_YEAR,
+);
+const earlyL1 = runL1({
+  solarDate: '2002-11-30',
+  solarTime: '00:30',
+  cityName: '北京',
+  timezoneOffset: 8,
+  timePrecision: 'minute',
+  sourceReliability: 'certificate',
+});
+const early = runL2(
+  earlyL1.timeCorrection.trueSolarClockTime,
+  'male',
+  earlyL1.normalized.timeKnown,
+  CURRENT_YEAR,
+);
+checks.push(
+  ['排盘边界 晚子时23:30 日柱不换(辛丑)', late.bazi.pillars.day.ganzhi === '辛丑'],
+  ['排盘边界 早子时00:30 日柱切换(壬寅)', early.bazi.pillars.day.ganzhi === '壬寅'],
+  [
+    '排盘边界 晚/早子时均入子时柱(庚子)',
+    late.bazi.pillars.time.ganzhi === '庚子' && early.bazi.pillars.time.ganzhi === '庚子',
+  ],
+);
+
 let failed = 0;
 for (const [name, ok] of checks) {
   if (!ok) failed++;
