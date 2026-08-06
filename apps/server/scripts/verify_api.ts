@@ -810,6 +810,31 @@ check(
   'CORS 白名单放行允许来源',
   okCors.headers['access-control-allow-origin'] === 'http://allowed.example',
 );
+const preflight = await corsApp.inject({
+  method: 'OPTIONS',
+  url: '/api/v1/locations/search?q=bei',
+  headers: {
+    origin: 'http://allowed.example',
+    'access-control-request-method': 'GET',
+  },
+});
+check(
+  'CORS preflight 放行白名单来源（204 + ACAO）',
+  preflight.statusCode === 204 &&
+    preflight.headers['access-control-allow-origin'] === 'http://allowed.example',
+);
+const evilPreflight = await corsApp.inject({
+  method: 'OPTIONS',
+  url: '/api/v1/locations/search?q=bei',
+  headers: {
+    origin: 'https://evil.example',
+    'access-control-request-method': 'GET',
+  },
+});
+check(
+  'CORS preflight 拒绝陌生来源（无 ACAO 头）',
+  evilPreflight.headers['access-control-allow-origin'] === undefined,
+);
 corsDb.close();
 
 // 14.4 请求体上限：>64KB body 返回 413 统一响应
@@ -1221,6 +1246,15 @@ check(
   'hash 静态资源强缓存（max-age + immutable）',
   hashAsset.statusCode === 200 &&
     String(hashAsset.headers['cache-control']).toLowerCase().includes('immutable'),
+);
+const hashConditional = await staticApp.inject({
+  method: 'GET',
+  url: '/assets/index-a1b2c3.js',
+  headers: { 'if-none-match': String(hashAsset.headers['etag']) },
+});
+check(
+  'ETag 条件请求命中返回 304',
+  hashConditional.statusCode === 304 && hashConditional.payload === '',
 );
 const spaFallback = await staticApp.inject({ method: 'GET', url: '/reports/123' });
 check(
