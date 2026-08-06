@@ -1150,6 +1150,21 @@ const meAfter = await call('GET', '/api/v1/auth/me', { token: tokenA });
 check('修改昵称持久化（me 接口可见）', meAfter.json.data?.nickname === '新昵称甲');
 const statsAnon = await call('GET', '/api/v1/stats/overview');
 check('统计看板未登录 401', statsAnon.status === 401 && statsAnon.json.code === 401);
+const statsCalc = statsD as Record<string, number | string | null>;
+const sr = statsCalc.totalRecords as number;
+const pr = statsCalc.paidRecords as number;
+const tp = statsCalc.totalPlans as number;
+const dp = statsCalc.donePlans as number;
+const statsOk =
+  statsCalc.unlockRate === (sr > 0 ? Math.round((pr / sr) * 100) : 0) &&
+  statsCalc.planCompletionRate === (tp > 0 ? Math.round((dp / tp) * 100) : 0) &&
+  statsCalc.unlockRate >= 0 &&
+  statsCalc.unlockRate <= 100 &&
+  statsCalc.planCompletionRate >= 0 &&
+  statsCalc.planCompletionRate <= 100 &&
+  tp >= 7 &&
+  typeof statsCalc.lastRecordAt === 'string';
+check('统计看板指标一致性（解锁率/计划完成率公式、≥7计划、最近记录时间）', statsOk);
 
 // ---------- 13. 取消订单 + 深度模式筛选 + 订单过期批量清理 ----------
 const cancelArc = await call('POST', '/api/v1/archives', {
