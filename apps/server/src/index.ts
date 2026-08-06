@@ -80,6 +80,7 @@ process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
  * 避免半坏进程静默存活导致数据脏写或请求错乱。
  */
 process.on('uncaughtException', (err) => void gracefulShutdown('uncaughtException', err, 1));
-process.on('unhandledRejection', (reason) =>
-  void gracefulShutdown('unhandledRejection', reason, 1),
+process.on(
+  'unhandledRejection',
+  (reason) => void gracefulShutdown('unhandledRejection', reason, 1),
 );

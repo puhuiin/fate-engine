@@ -892,7 +892,9 @@ const brHit = await gzApp.inject({
   headers: { authorization: `Bearer ${gzToken}`, 'accept-encoding': 'gzip, br' },
 });
 check('brotli：声明 br 优先返回 content-encoding: br', brHit.headers['content-encoding'] === 'br');
-const brJson = JSON.parse(await decompressBrotli(Buffer.from(brHit.rawPayload))) as { code: number };
+const brJson = JSON.parse(await decompressBrotli(Buffer.from(brHit.rawPayload))) as {
+  code: number;
+};
 check('brotli：解压后 JSON 完整可解析', brJson.code === 200);
 gzDb.close();
 
@@ -1033,6 +1035,18 @@ const idEcho = await app.inject({
   headers: { 'x-request-id': 'trace-abc-123' },
 });
 check('客户端传入 X-Request-Id 被透传回显', idEcho.headers['x-request-id'] === 'trace-abc-123');
+
+// ---------- 11.8 健康分级探针：liveness 不依赖 DB、readiness 依赖 DB ----------
+const liveProbe = await app.inject({ method: 'GET', url: '/api/health/live' });
+check('存活探针 /api/health/live 返回 200', liveProbe.statusCode === 200);
+check('存活探针返回 ok:true', (liveProbe.json() as { ok?: boolean }).ok === true);
+const readyProbe = await app.inject({ method: 'GET', url: '/api/health/ready' });
+check('就绪探针 /api/health/ready DB 正常返回 200', readyProbe.statusCode === 200);
+const readyBody = readyProbe.json() as { ok?: boolean; dbSizeMB?: number };
+check(
+  '就绪探针返回 ok:true 与 dbSizeMB',
+  readyBody.ok === true && typeof readyBody.dbSizeMB === 'number',
+);
 
 // ---------- 12. 统计看板 + 个人资料编辑 ----------
 const stats = await call('GET', '/api/v1/stats/overview', { token: tokenA });
