@@ -253,9 +253,8 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
     return payload;
   });
 
-  app.get('/api/health', async (_req, reply) => {
-    let dbOk = true;
-    let dbSizeBytes = 0;
+  /** 数据库健康探测：聚合探针与就绪探针复用，避免重复样板 */
+  const dbHealth = (): { ok: boolean; sizeBytes: number } => {
     try {
       db.prepare('SELECT 1 AS ok').get();
       const sizeRow = db
@@ -263,10 +262,18 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
           'SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()',
         )
         .get() as { bytes?: number };
-      dbSizeBytes = Number(sizeRow?.bytes) || 0;
+      return { ok: true, sizeBytes: Number(sizeRow?.bytes) || 0 };
     } catch {
-      dbOk = false;
+      return { ok: false, sizeBytes: 0 };
     }
+  };
+
+  /**
+   * 聚合健康检查（向后兼容）：docker healthcheck 与既有契约使用。
+   * DB 不可达时返回 503，便于编排层判定实例不健康。
+   */
+  app.get('/api/health', async (_req, reply) => {
+    const { ok: dbOk, sizeBytes: dbSizeBytes } = dbHealth();
     const mem = process.memoryUsage();
     const body = {
       ok: dbOk,
@@ -284,6 +291,28 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       reply.code(503);
     }
     return body;
+  });
+
+  /**
+   * 存活探针（liveness）：进程可达即 200，不做依赖检查，轻量高频。
+   * 编排层据此判定是否重启容器，与就绪探针解耦避免 DB 抖动误杀进程。
+   */
+  app.get('/api/health/live', async () => ({ ok: true, time: new Date().toISOString() }));
+
+  /**
+   * 就绪探针（readiness）：DB 可达才 200，否则 503。
+   * 编排层据此摘流——不可用实例不接收新请求，但仍存活等待恢复。
+   */
+  app.get('/api/health/ready', async (_req, reply) => {
+    const { ok: dbOk, sizeBytes } = dbHealth();
+    if (!dbOk) {
+      reply.code(503);
+    }
+    return {
+      ok: dbOk,
+      dbSizeMB: Math.round(sizeBytes / 1024 / 1024),
+      time: new Date().toISOString(),
+    };
   });
 
   /** OpenAPI 契约：机器可读 API 文档，端点与 routes/ 同步登记 */

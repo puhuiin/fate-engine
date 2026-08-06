@@ -25,7 +25,21 @@ export function buildOpenApiDoc(): Record<string, unknown> {
       get: {
         summary: '健康检查（含 pid / 内存 / 库体占用 / 九层版本）',
         security: [],
-        responses: { 200: okResp('服务与数据库状态') },
+        responses: { 200: okResp('服务与数据库状态'), 503: okResp('数据库不可达') },
+      },
+    },
+    '/api/health/live': {
+      get: {
+        summary: '存活探针（进程可达即 200，轻量高频）',
+        security: [],
+        responses: { 200: okResp('进程存活') },
+      },
+    },
+    '/api/health/ready': {
+      get: {
+        summary: '就绪探针（DB 可达才 200，否则 503 摘流）',
+        security: [],
+        responses: { 200: okResp('实例就绪'), 503: okResp('依赖未就绪') },
       },
     },
     '/api/openapi.json': {
