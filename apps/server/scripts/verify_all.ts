@@ -213,7 +213,7 @@ for (const [name, ok] of checks) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`);
 }
 if (failed > 0) {
-  console.error(`${failed} 个断言失败`);
+  console.error(`${failed} / ${checks.length} 个断言失败`);
   process.exit(1);
 }
-console.log('九层全量校验通过');
+console.log(`九层全量校验通过（${checks.length} 项断言）`);

@@ -1131,6 +1131,38 @@ const filterBadType = await call('GET', '/api/v1/records?calcType=quantum-extra'
 });
 check('非法 calcType 筛选 400', filterBadType.status === 400 && filterBadType.json.code === 400);
 
+// 订单历史列表：返回关联记录摘要且倒序；跨用户隔离（B 不可见 A 的订单）
+const orderListA = await call('GET', '/api/v1/orders', { token: tokenA });
+const orderListARows = (orderListA.json.data ?? []) as Array<{
+  id: number;
+  entitlement_status: string;
+  calc_type?: string;
+  record_paid_status?: number;
+}>;
+check(
+  '订单历史列表含关联记录摘要（calc_type/record_paid_status）',
+  orderListA.status === 200 &&
+    orderListARows.some(
+      (o) =>
+        o.id === paidOrdId &&
+        o.entitlement_status === 'granted' &&
+        o.calc_type === 'quantum' &&
+        o.record_paid_status === 1,
+    ) &&
+    orderListARows.some((o) => o.id === cancelOrderId && o.entitlement_status === 'expired'),
+);
+check(
+  '订单历史倒序（最新在前）',
+  orderListARows.every((o, i) => i === 0 || (orderListARows[i - 1]?.id ?? 0) >= o.id),
+);
+const orderListB = await call('GET', '/api/v1/orders', { token: tokenB });
+const orderListBRows = (orderListB.json.data ?? []) as Array<{ id: number }>;
+check(
+  '订单历史跨用户隔离（B 不可见 A 订单）',
+  orderListB.status === 200 &&
+    !orderListBRows.some((o) => o.id === paidOrdId || o.id === cancelOrderId),
+);
+
 // 新建一条未解锁记录，用于订单过期批量清理测试
 const zombieCalc = await call('POST', '/api/v1/calculate', {
   token: tokenA,
