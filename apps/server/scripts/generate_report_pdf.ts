@@ -433,6 +433,85 @@ function renderSummary(
   doc.addPage();
 }
 
+/** 超长文本截断展示 */
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n)}…` : s;
+}
+
+/** 跨层一致性洞察：把九层结论串成因果链（纯渲染推导） */
+function analyzeSynergy(
+  l4: L4Output,
+  l5: L5Output,
+  l6: L6Output,
+  l7: L7Output,
+  l9: L9Output,
+): string[] {
+  const sorted = [...l4.dimensions].sort((a, b) => b.total - a.total);
+  const maxDim = sorted[0];
+  const minDim = sorted[sorted.length - 1];
+  const topLine = [...l6.lines].sort((a, b) => b.fit - a.fit)[0];
+  return [
+    `短板闭环：最需提升的「${minDim.name}」（${minDim.total} 分）与主卡点「${l5.mainKnot}」同源，心智模式直接塑造行为短板，改善它等于同时解锁卡点。`,
+    `优势主线：最强维度「${maxDim.name}」（${maxDim.total} 分）与最高契合线「${topLine.name}」（契合 ${topLine.fit}）方向一致，顺势而为可最大化个人禀赋。`,
+    `内核自洽：L7 内核声明「${truncate(l7.coreNote, 18)}」与 L9 心性本质「${truncate(l9.essence, 18)}」互为表里，演算结论内部自洽。`,
+  ];
+}
+
+/** 九层速览：横断面一眼看穿全局 + 跨层洞察 */
+function renderOverview(
+  doc: PDFKit.PDFDocument,
+  l1: L1Output,
+  l2: L2Output,
+  l3: L3Output,
+  l4: L4Output,
+  l5: L5Output,
+  l6: L6Output,
+  l7: L7Output,
+  l8: L8Output,
+  l9: L9Output,
+): void {
+  ensureSpace(doc, 120);
+  drawPageHeader(doc, '九层速览 · 横断面全局图');
+  const bazi = l2.bazi;
+  const xi = analyzeXiJi(bazi);
+  const l3Top = [...l3.personality].sort((a, b) => b.score - a.score)[0];
+  const sorted = [...l4.dimensions].sort((a, b) => b.total - a.total);
+  const maxDim = sorted[0];
+  const minDim = sorted[sorted.length - 1];
+  const topLine = [...l6.lines].sort((a, b) => b.fit - a.fit)[0];
+
+  section(doc, '九层速览');
+  table(
+    doc,
+    ['层级', '一句话要点'],
+    [
+      [
+        'L1 时空校准',
+        `真太阳时 ${l1.timeCorrection.totalOffsetMinutes} 分偏移，${l1.timeCorrection.crossDay ? '跨日' : '未跨日'}；置信评级 ${l1.rating.grade}`,
+      ],
+      [
+        'L2 命盘',
+        `${bazi.dayMaster.gan}金日主${bazi.strength}；喜 ${xi.xi.join('、')}，忌 ${xi.ji.join('、') || '无'}${xi.missing.length ? `；缺 ${xi.missing.join('、')}` : ''}`,
+      ],
+      ['L3 人格', `${l3Top.dimension}（${l3Top.score} 分）居首；天赋：${l3.strengths[0]}`],
+      [
+        'L4 六维',
+        `最强 ${maxDim.name}（${maxDim.total}），最需提升 ${minDim.name}（${minDim.total}）`,
+      ],
+      ['L5 卡点', `${l5.mainKnot}（共 ${l5.karmaPatterns.length} 项）`],
+      ['L6 主线', `${topLine.name}（契合 ${topLine.fit}）`],
+      ['L7 内核', `${l7.conflictResolution.length} 项冲突裁定；${truncate(l7.coreNote, 20)}`],
+      ['L8 阶段', `${l8.levels.length} 级行动规划；${l8.levels[0].name} 起步`],
+      ['L9 课题', `${l9.lifeLessons.length} 项课题；${truncate(l9.essence, 20)}`],
+    ],
+    [0.16, 0.84],
+  );
+
+  section(doc, '跨层一致性洞察');
+  analyzeSynergy(l4, l5, l6, l7, l9).forEach((t, i) => listItem(doc, i + 1, t));
+  doc.addPage();
+}
+
 function renderL1(doc: PDFKit.PDFDocument, d: L1Output): void {
   section(doc, '归一化输入');
   kv(doc, '公历生日', d.normalized.solarDate);
@@ -917,6 +996,9 @@ function main(): void {
 
   // ---------- 卷首推演摘要 ----------
   renderSummary(doc, l2, l4, l5, l6, l9);
+
+  // ---------- 九层速览 · 横断面全局图 ----------
+  renderOverview(doc, l1, l2, l3, l4, l5, l6, l7, l8, l9);
 
   // ---------- 九层正文 ----------
   for (const item of report) {
