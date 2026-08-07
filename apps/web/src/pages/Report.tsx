@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useReportData } from '../hooks/useReportData';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useReportData, type ReportInitialData } from '../hooks/useReportData';
 import { useReportExport } from '../hooks/useReportExport';
 import { Skeleton, SkeletonCard, SkeletonRows } from '../components/Skeleton';
 import { LAYER_NAMES, MODULE_HINT, calcTypeDesc } from '../layers';
@@ -41,6 +41,7 @@ class LayerBoundary extends Component<{ layer: number; children: ReactNode }, { 
 export default function Report() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const recordId = Number(id);
   const [channel, setChannel] = useState('wechat');
 
@@ -65,7 +66,10 @@ export default function Report() {
     unlock,
     togglePlan,
     reCalc,
-  } = useReportData(recordId);
+  } = useReportData(recordId, {
+    // 加载动画期间已预取的报告：命中时跳过首拉，直接渲染
+    initial: (location.state as { initial?: ReportInitialData } | null)?.initial,
+  });
 
   const { copied, buildGuide, exportText } = useReportExport();
 

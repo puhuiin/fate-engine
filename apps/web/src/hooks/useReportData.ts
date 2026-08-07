@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   calculate,
   createUnlockOrder,
@@ -32,6 +32,14 @@ export interface ReportDataState {
   l9: L9Result | null;
 }
 
+/** 预取注入：加载动画期间已从接口拿到的报告数据，命中时跳过报告首拉（省一个 RTT） */
+export interface ReportInitialData {
+  report?: ReportDataState | null;
+  paidStatus?: number;
+  calc_type?: string;
+  archive_id?: number;
+}
+
 /**
  * 报告页数据层 hook：集中管理九层报告、解锁状态、改运计划与风险项的加载与变更，
  * 将异步状态机从 UI 组件中剥离，组件只负责渲染。
@@ -39,7 +47,7 @@ export interface ReportDataState {
  * 竞态防护：recordId 变化/组件卸载时通过 AbortController 取消在途请求，
  * 防止旧记录的慢响应覆盖新记录数据。
  */
-export function useReportData(recordId: number) {
+export function useReportData(recordId: number, opts?: { initial?: ReportInitialData | null }) {
   const [data, setData] = useState<ReportDataState>({
     l1: null,
     l2: null,
@@ -61,6 +69,9 @@ export function useReportData(recordId: number) {
   const [reCalcId, setReCalcId] = useState<number | null>(null);
   const [unlockError, setUnlockError] = useState('');
   const [loadError, setLoadError] = useState('');
+  // 预取数据用 ref 固化：initial 是导航 state 中的对象，若作为 effect 依赖，
+  // 每次渲染新引用会触发加载 effect 无限重跑（→ 无限循环渲染）。
+  const initialRef = useRef(opts?.initial ?? null);
 
   const refreshPlansRisks = useCallback(
     async (signal?: AbortSignal) => {
@@ -168,8 +179,31 @@ export function useReportData(recordId: number) {
     const ctrl = new AbortController();
     (async () => {
       try {
-        // 报告与计划/风险无依赖，并行加载省一个 RTT（二者均接受 signal 并在中止时丢弃结果）
-        await Promise.all([reload(ctrl.signal), refreshPlansRisks(ctrl.signal)]);
+        const init = initialRef.current;
+        const hasInitial = Boolean(init && init.report);
+        if (hasInitial) {
+          const r = init!.report!;
+          setData({
+            l1: r.l1 ?? null,
+            l2: r.l2 ?? null,
+            l3: r.l3 ?? null,
+            l4: r.l4 ?? null,
+            l5: r.l5 ?? null,
+            l6: r.l6 ?? null,
+            l7: r.l7 ?? null,
+            l8: r.l8 ?? null,
+            l9: r.l9 ?? null,
+          });
+          setPaidStatus(init?.paidStatus ?? 0);
+          if (init?.calc_type) setCalcType(init.calc_type);
+          if (init?.archive_id && init.archive_id > 0) setArchiveId(init.archive_id);
+          setLoading(false);
+        }
+        // 报告数据已由预取注入时跳过 getRecord 首拉，计划/风险仍并行加载
+        await Promise.all([
+          hasInitial ? Promise.resolve() : reload(ctrl.signal),
+          refreshPlansRisks(ctrl.signal),
+        ]);
       } catch (e) {
         if (ctrl.signal.aborted) return;
         setLoadError(e instanceof Error ? e.message : '报告加载失败，请刷新重试');

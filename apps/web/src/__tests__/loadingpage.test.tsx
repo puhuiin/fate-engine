@@ -6,6 +6,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import Loading from '../pages/Loading';
 import { LAYER_SKELETON } from '../layers';
 
+const api = vi.hoisted(() => ({ getRecord: vi.fn() }));
+vi.mock('../api/client', () => ({ getRecord: api.getRecord }));
+
+const ok = (data: unknown) => ({ code: 200, msg: '', data, timestamp: 0, sign: '' });
+
 function renderLoading(state: { recordId: number } | null) {
   return render(
     <MemoryRouter initialEntries={[{ pathname: '/loading', ...(state ? { state } : {}) }]}>
@@ -22,6 +27,28 @@ function renderLoading(state: { recordId: number } | null) {
 describe('Loading 测算页', () => {
   beforeEach(() => {
     vi.useRealTimers();
+    api.getRecord.mockResolvedValue(
+      ok({
+        id: 7,
+        archive_id: 1,
+        calc_type: 'standard',
+        status: 'completed',
+        created_at: '2026-01-01 00:00:00',
+        report: {
+          l1: { marker: 1 },
+          l2: null,
+          l3: null,
+          l4: null,
+          l5: null,
+          l6: null,
+          l7: null,
+          l8: null,
+          l9: null,
+        },
+        paidStatus: 0,
+        dataError: false,
+      }),
+    );
   });
 
   it('缺少测算数据时提示并给返回首页入口', () => {
@@ -34,6 +61,22 @@ describe('Loading 测算页', () => {
     renderLoading(null);
     fireEvent.click(screen.getByRole('link', { name: '返回首页' }));
     expect(screen.getByTestId('home-route')).toBeInTheDocument();
+  });
+
+  it('动画期间并行预取报告数据', async () => {
+    vi.useFakeTimers();
+    try {
+      renderLoading({ recordId: 7 });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(220 * 2);
+      });
+      expect(api.getRecord).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({ signal: expect.anything() }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('九层动画按序推进并自动跳转报告页', async () => {

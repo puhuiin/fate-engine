@@ -57,6 +57,26 @@ describe('useReportData 加载', () => {
     expect(result.current.unlocked).toBe(true);
   });
 
+  it('传入 initial 预取数据时跳过报告首拉并直接渲染', async () => {
+    const initial = recordOf(l1a, 1);
+    const { result } = renderHook(() =>
+      useReportData(1, {
+        initial: {
+          report: initial.report,
+          paidStatus: initial.paidStatus,
+          calc_type: initial.calc_type,
+          archive_id: initial.archive_id,
+        },
+      }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(api.getRecord).not.toHaveBeenCalled();
+    expect(result.current.data.l1).toEqual(l1a);
+    expect(result.current.unlocked).toBe(true);
+    expect(result.current.calcType).toBe('standard');
+    expect(result.current.archiveId).toBe(1);
+  });
+
   it('加载失败设置 loadError 并结束 loading', async () => {
     api.getRecord.mockRejectedValue(new Error('网络请求超时或失败'));
     const { result } = renderHook(() => useReportData(1));

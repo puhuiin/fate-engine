@@ -1,17 +1,51 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LAYER_SKELETON } from '../layers';
+import { getRecord, type RecordDetail } from '../api/client';
 
 export default function Loading() {
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as { recordId: number } | null;
   const [doneCount, setDoneCount] = useState(0);
+  // 动画期间并行预取报告：跳转时随 state 传给报告页，免去二次首拉
+  const prefetched = useRef<RecordDetail | null>(null);
+
+  const goReport = (replace: boolean) => {
+    if (!state) return;
+    navigate(`/report/${state.recordId}`, {
+      replace,
+      state: {
+        recordId: state.recordId,
+        initial: prefetched.current
+          ? {
+              report: prefetched.current.report,
+              paidStatus: prefetched.current.paidStatus,
+              calc_type: prefetched.current.calc_type,
+              archive_id: prefetched.current.archive_id,
+            }
+          : undefined,
+      },
+    });
+  };
 
   const skip = () => {
-    if (state) navigate(`/report/${state.recordId}`, { replace: true });
+    if (state) goReport(true);
     else navigate('/');
   };
+
+  // 预取报告：动画播完前大概率完成，未完成时回退为报告页正常拉取
+  useEffect(() => {
+    if (!state) return;
+    const ctrl = new AbortController();
+    getRecord(state.recordId, { signal: ctrl.signal })
+      .then((res) => {
+        if (ctrl.signal.aborted) return;
+        if (res.code === 200 && res.data) prefetched.current = res.data;
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [state]);
 
   useEffect(() => {
     if (!state) return;
@@ -27,7 +61,24 @@ export default function Loading() {
   // 组件卸载或依赖变化时不会残留一个「跳转到报告页」的悬挂定时器。
   useEffect(() => {
     if (!state || doneCount < LAYER_SKELETON.length) return;
-    const t = setTimeout(() => navigate(`/report/${state.recordId}`, { replace: true }), 300);
+    const t = setTimeout(
+      () =>
+        navigate(`/report/${state.recordId}`, {
+          replace: true,
+          state: {
+            recordId: state.recordId,
+            initial: prefetched.current
+              ? {
+                  report: prefetched.current.report,
+                  paidStatus: prefetched.current.paidStatus,
+                  calc_type: prefetched.current.calc_type,
+                  archive_id: prefetched.current.archive_id,
+                }
+              : undefined,
+          },
+        }),
+      300,
+    );
     return () => clearTimeout(t);
   }, [doneCount, state, navigate]);
 
