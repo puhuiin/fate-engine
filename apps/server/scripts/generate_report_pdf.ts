@@ -18,6 +18,7 @@ import { runL6, type L6Output } from '../src/modules/l6/l6.js';
 import { runL7, type L7Output } from '../src/modules/l7/l7.js';
 import { runL8, type L8Output } from '../src/modules/l8/l8.js';
 import { runL9, type L9Output } from '../src/modules/l9/l9.js';
+import type { BaziResult } from '../src/modules/l2/bazi.js';
 import { buildNineLayerReport, type NineLayerReportItem } from '../src/report.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -64,6 +65,102 @@ const CASE = {
 
 const availWidth = (doc: PDFKit.PDFDocument): number =>
   doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+// ---------------- 五行喜忌分析（纯渲染推导，不改变模块输出） ----------------
+
+const WX_SHENG = { 木: '火', 火: '土', 土: '金', 金: '水', 水: '木' } as const; // 我生（食伤）
+const WX_SHENGME = { 木: '水', 火: '木', 土: '火', 金: '土', 水: '金' } as const; // 生我（印）
+const WX_KE = { 木: '土', 土: '水', 水: '火', 火: '金', 金: '木' } as const; // 我克（财）
+const WX_KEME = { 木: '金', 火: '水', 土: '木', 金: '火', 水: '土' } as const; // 克我（官杀）
+
+interface XiJiAnalysis {
+  strength: string;
+  day: string;
+  xi: string[];
+  ji: string[];
+  missing: string[];
+  weakest: [string, number];
+  strongest: [string, number];
+  note: string;
+}
+
+/** 依据日主旺衰推导喜忌：偏旺宜克泄耗、偏弱宜生扶、中和补最弱 */
+function analyzeXiJi(bazi: BaziResult): XiJiAnalysis {
+  const day = bazi.dayMaster.wuxing;
+  const wc = bazi.wuxingCount;
+  const sorted = Object.entries(wc).sort((a, b) => a[1] - b[1]);
+  const weakest = sorted[0] as [string, number];
+  const strongest = sorted[sorted.length - 1] as [string, number];
+  const missing = Object.keys(wc).filter((k) => wc[k] === 0);
+
+  if (bazi.strength === '偏旺') {
+    const xi = [WX_KEME[day], WX_SHENG[day], WX_KE[day]]; // 克我/我生/我克 → 克泄耗
+    const ji = [WX_SHENGME[day], day]; // 生我/同我 → 生扶
+    const hit = missing.filter((m) => xi.includes(m));
+    return {
+      strength: bazi.strength,
+      day,
+      xi,
+      ji,
+      missing,
+      weakest,
+      strongest,
+      note: `日主${day}偏旺，宜「克泄耗」求平衡：喜用 ${xi.join('、')}；忌「生扶」助长：忌 ${ji.join('、')}。${
+        hit.length ? `其中所缺「${hit.join('、')}」恰为喜用，缺而无碍，主动补足更利格局。` : ''
+      }`,
+    };
+  }
+  if (bazi.strength === '偏弱') {
+    const xi = [WX_SHENGME[day], day]; // 生我/同我
+    const ji = [WX_KEME[day], WX_SHENG[day], WX_KE[day]];
+    const hit = missing.filter((m) => ji.includes(m));
+    return {
+      strength: bazi.strength,
+      day,
+      xi,
+      ji,
+      missing,
+      weakest,
+      strongest,
+      note: `日主${day}偏弱，宜「生扶」补力：喜用 ${xi.join('、')}；忌「克泄耗」损耗：忌 ${ji.join('、')}。${
+        hit.length ? `所缺「${hit.join('、')}」为忌神，缺失反而减少耗损。` : ''
+      }`,
+    };
+  }
+  return {
+    strength: '中和',
+    day,
+    xi: [weakest[0]],
+    ji: [],
+    missing,
+    weakest,
+    strongest,
+    note: `五行${bazi.strength}、分布相对均衡，无需强行偏向；宜略补相对最弱之「${weakest[0]}」（${weakest[1]} 处），并在行动上保持多方兼顾。`,
+  };
+}
+
+/** 十神结构解读：按旺衰阈值输出性格倾向（纯渲染推导） */
+function analyzeShishen(bazi: BaziResult): string[] {
+  const countOf = (n: string) => bazi.shishenStats.find((s) => s.name === n)?.count ?? 0;
+  const biJie = countOf('比肩') + countOf('劫财');
+  const guanSha = countOf('正官') + countOf('七杀');
+  const yin = countOf('正印') + countOf('偏印');
+  const shiShang = countOf('食神') + countOf('伤官');
+  const cai = countOf('正财') + countOf('偏财');
+  const out: string[] = [];
+  if (biJie >= 3)
+    out.push(`比劫偏旺（${biJie} 处）：独立自主、重情讲义、执行力强，但需留意固执与竞争心。`);
+  if (guanSha >= 3)
+    out.push(`官杀偏旺（${guanSha} 处）：自律、有目标感与责任心，但易自我加压，需学会放松。`);
+  if (yin >= 3)
+    out.push(`印星偏旺（${yin} 处）：学习吸收能力强、做事有规划，但需避免想得多、动得少。`);
+  if (shiShang >= 3)
+    out.push(`食伤偏旺（${shiShang} 处）：表达与创造力突出，善于破局，但需避免心高气浮。`);
+  if (cai >= 3)
+    out.push(`财星偏旺（${cai} 处）：重实际、有经营意识，行动讲回报，但需避免过于精打细算。`);
+  if (out.length === 0) out.push('十神分布较为均衡，性格偏综合性，无明显单一主导。');
+  return out;
+}
 
 // ---------------- 通用排版工具 ----------------
 
@@ -251,6 +348,91 @@ function table(
 
 // ---------------- 各层渲染 ----------------
 
+/** 卷首推演摘要：跨层收敛，一张图看懂全局（纯渲染推导，不改模块输出） */
+function renderSummary(
+  doc: PDFKit.PDFDocument,
+  l2: L2Output,
+  l4: L4Output,
+  l5: L5Output,
+  l6: L6Output,
+  l9: L9Output,
+): void {
+  drawPageHeader(doc, '推演摘要 · 一张图看懂全局');
+  const bazi = l2.bazi;
+  const xi = analyzeXiJi(bazi);
+
+  section(doc, '命盘基本盘');
+  kv(
+    doc,
+    '四柱',
+    `${bazi.pillars.year.ganzhi}  ${bazi.pillars.month.ganzhi}  ${bazi.pillars.day.ganzhi}  ${bazi.pillars.time.ganzhi}`,
+  );
+  kv(doc, '日主', `${bazi.dayMaster.gan}（五行${bazi.dayMaster.wuxing}）`);
+  kv(doc, '旺衰', bazi.strength);
+  kv(
+    doc,
+    '五行分布',
+    Object.entries(bazi.wuxingCount)
+      .map(([k, v]) => `${k}${v}`)
+      .join('　'),
+  );
+
+  section(doc, '五行喜忌');
+  kv(doc, '喜用', xi.xi.join('、'));
+  kv(doc, '忌用', xi.ji.length ? xi.ji.join('、') : '无明显忌');
+  kv(doc, '偏强', `${xi.strongest[0]}（${xi.strongest[1]} 处）`);
+  kv(
+    doc,
+    '偏弱/缺失',
+    `${xi.weakest[0]}（${xi.weakest[1]} 处）${xi.missing.length ? `；五行缺：${xi.missing.join('、')}` : ''}`,
+  );
+  noteBlock(doc, xi.note, '喜忌分析');
+
+  const top = [...l6.lines].sort((a, b) => b.fit - a.fit)[0];
+  if (top) {
+    section(doc, '命运主线');
+    kv(doc, '最契合路径', `${top.name}（契合度 ${top.fit}）`);
+    para(doc, top.strategy, 14);
+    if (top.risk) para(doc, `风险提示：${top.risk}`, 14);
+  }
+
+  const maxDim = [...l4.dimensions].sort((a, b) => b.total - a.total)[0];
+  const minDim = [...l4.dimensions].sort((a, b) => a.total - b.total)[0];
+  if (maxDim && minDim) {
+    section(doc, '六维强弱');
+    kv(doc, '优势维度', `${maxDim.name}（${maxDim.total} 分）`);
+    kv(doc, '最需提升', `${minDim.name}（${minDim.total} 分）`);
+    para(doc, minDim.advice, 14);
+  }
+
+  section(doc, '卡点与行运');
+  kv(doc, '核心卡点', l5.mainKnot);
+  const cur = bazi.currentDaYun;
+  if (cur) {
+    kv(
+      doc,
+      '当前大运',
+      `${cur.ganzhi}（${cur.startYear}-${cur.endYear}，${cur.startAge}-${cur.endAge} 岁）`,
+    );
+  }
+
+  if (l9.essence) noteBlock(doc, l9.essence, '一句话本质');
+  if (l9.mantra) {
+    ensureSpace(doc, 50);
+    doc.moveDown(0.8);
+    doc
+      .fillColor(GOLD)
+      .fontSize(13)
+      .font(FONT_BOLD)
+      .text(`「${l9.mantra}」`, doc.page.margins.left + 14, doc.y, {
+        width: availWidth(doc) - 28,
+        align: 'center',
+      });
+    doc.moveDown(0.8);
+  }
+  doc.addPage();
+}
+
 function renderL1(doc: PDFKit.PDFDocument, d: L1Output): void {
   section(doc, '归一化输入');
   kv(doc, '公历生日', d.normalized.solarDate);
@@ -270,12 +452,17 @@ function renderL1(doc: PDFKit.PDFDocument, d: L1Output): void {
   kv(doc, '钟表时间', iso(d.timeCorrection.clockTime));
   kv(doc, 'UTC 时间', iso(d.timeCorrection.utcTime));
   kv(doc, '平均太阳时', `${d.timeCorrection.meanSolarHours.toFixed(2)} 时`);
+  kv(doc, '经度修正', `${((d.location.longitude - 120) * 4).toFixed(1)} 分`);
   kv(doc, '均时差', `${d.timeCorrection.equationOfTimeMinutes.toFixed(2)} 分`);
   kv(doc, '真太阳时', `${d.timeCorrection.trueSolarHours.toFixed(2)} 时`);
-  kv(doc, '经度校正', `${d.timeCorrection.offsetMinutes} 分`);
   kv(doc, '综合偏移', `${d.timeCorrection.totalOffsetMinutes} 分`);
   kv(doc, '校正后时刻', iso(d.timeCorrection.trueSolarClockTime));
   kv(doc, '是否跨日', d.timeCorrection.crossDay ? '是' : '否');
+  noteBlock(
+    doc,
+    `时差推导：真太阳时 = 钟表时 + 经度修正（(东经${d.location.longitude}° - 120°)×4 ≈ ${((d.location.longitude - 120) * 4).toFixed(1)} 分）+ 均时差（${d.timeCorrection.equationOfTimeMinutes.toFixed(1)} 分）≈ ${d.timeCorrection.totalOffsetMinutes} 分综合偏移。经度修正来自出生地相对东经 120° 标准子午线的经度差，均时差来自地球公转轨道偏心率与黄赤交角。`,
+    '校正推导',
+  );
 
   section(doc, '时辰归属');
   kv(doc, '时辰', `${d.shichen.name}（${d.shichen.start}-${d.shichen.end} 点）`);
@@ -388,6 +575,18 @@ function renderL2(doc: PDFKit.PDFDocument, d: L2Output): void {
       kv(doc, `五${wuxing}`, `${count} 处`);
     }
 
+    const xi = analyzeXiJi(d.bazi);
+    section(doc, '五行喜忌分析');
+    kv(doc, '喜用', xi.xi.join('、'));
+    kv(doc, '忌用', xi.ji.length ? xi.ji.join('、') : '无明显忌');
+    kv(doc, '偏强', `${xi.strongest[0]}（${xi.strongest[1]} 处）`);
+    kv(
+      doc,
+      '偏弱/缺失',
+      `${xi.weakest[0]}（${xi.weakest[1]} 处）${xi.missing.length ? `；五行缺：${xi.missing.join('、')}` : ''}`,
+    );
+    noteBlock(doc, xi.note, '喜忌分析');
+
     section(doc, '十神结构');
     table(
       doc,
@@ -395,6 +594,9 @@ function renderL2(doc: PDFKit.PDFDocument, d: L2Output): void {
       data.shishenStats.map((s) => [s.name, String(s.count)]),
       [0.5, 0.2],
     );
+
+    section(doc, '十神性格解读');
+    analyzeShishen(d.bazi).forEach((t, i) => listItem(doc, i + 1, t));
 
     if (data.daYun && data.daYun.length > 0) {
       section(doc, '大运走势');
@@ -465,6 +667,23 @@ function renderL4(doc: PDFKit.PDFDocument, d: L4Output): void {
   kv(doc, '流年行运', `${Math.round(d.weightModel.liunian * 100)}%`);
   kv(doc, '人为主动', `${Math.round(d.weightModel.renwei * 100)}%`);
   if (d.weightModel.note) noteBlock(doc, d.weightModel.note, '模型说明');
+
+  const sortedDims = [...d.dimensions].sort((a, b) => b.total - a.total);
+  section(doc, '六维总览（按综合分排序）');
+  table(
+    doc,
+    ['排名', '维度', '先天', '流年', '人为', '总分', '强弱'],
+    sortedDims.map((dim, i) => [
+      String(i + 1),
+      dim.name,
+      String(dim.xiantian),
+      String(dim.liunian),
+      String(dim.renwei),
+      String(dim.total),
+      i === 0 ? '优势' : i === sortedDims.length - 1 ? '最需提升' : '',
+    ]),
+    [0.06, 0.24, 0.11, 0.11, 0.11, 0.11, 0.26],
+  );
 
   section(doc, '六维落地');
   for (const dim of d.dimensions) {
@@ -695,6 +914,9 @@ function main(): void {
     .fontSize(11)
     .text('本报告仅供文化娱乐与自我探索参考，不构成任何专业建议。', { align: 'center' });
   doc.addPage();
+
+  // ---------- 卷首推演摘要 ----------
+  renderSummary(doc, l2, l4, l5, l6, l9);
 
   // ---------- 九层正文 ----------
   for (const item of report) {
