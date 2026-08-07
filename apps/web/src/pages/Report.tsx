@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode, useState } from 'react';
+import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useReportData, type ReportInitialData } from '../hooks/useReportData';
 import { useReportExport } from '../hooks/useReportExport';
@@ -72,6 +72,18 @@ export default function Report() {
   });
 
   const { copied, buildGuide, exportText } = useReportExport();
+
+  // 解锁流程完成（unlocking true→false 且已解锁）后，自动滚动到首个深度层 L4，
+  // 让用户直接看到刚解锁的内容；页面加载即已解锁的场景不触发。
+  // effect 在 commit 后运行，此时 layer-4 节点已渲染，无需延迟。
+  const prevUnlocking = useRef(unlocking);
+  useEffect(() => {
+    const prev = prevUnlocking.current;
+    prevUnlocking.current = unlocking;
+    if (prev && !unlocking && unlocked) {
+      document.getElementById('layer-4')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [unlocking, unlocked]);
 
   if (!Number.isInteger(recordId) || recordId <= 0) {
     return (

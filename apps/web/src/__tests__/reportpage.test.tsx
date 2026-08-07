@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import Report from '../pages/Report';
 import { useReportData, type ReportDataState } from '../hooks/useReportData';
@@ -193,5 +193,37 @@ describe('Report 页面集成', () => {
     mockedData.mockReturnValue(reportState({ reCalcId: 5 }));
     renderReport();
     expect(screen.getByRole('button', { name: '测算中…' })).toBeDisabled();
+  });
+
+  it('解锁流程完成后自动滚动到 L4，加载即已解锁不滚动', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const tree = () => (
+      <MemoryRouter initialEntries={['/report/5']}>
+        <Routes>
+          <Route path="/report/:id" element={<Report />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    mockedData.mockReturnValue(reportState({ unlocking: false, unlocked: false }));
+    const { rerender } = render(tree());
+    // 页面加载即已解锁（未经历支付流程）不触发滚动
+    mockedData.mockReturnValue(reportState({ unlocking: false, unlocked: true, paidStatus: 1 }));
+    await act(async () => {
+      rerender(tree());
+    });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    // 模拟支付流程：unlocking false→true（支付中）→false（完成）且 unlocked
+    mockedData.mockReturnValue(reportState({ unlocking: true, unlocked: false }));
+    await act(async () => {
+      rerender(tree());
+    });
+    mockedData.mockReturnValue(reportState({ unlocking: false, unlocked: true, paidStatus: 1 }));
+    await act(async () => {
+      rerender(tree());
+    });
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 });
