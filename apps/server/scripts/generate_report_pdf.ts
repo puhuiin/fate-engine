@@ -957,9 +957,10 @@ function main(): void {
     },
   });
 
+  // 输出到已 gitignore 的 data/ 目录，避免 PDF 生成产物反复进出版本库
   const outPath = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    '../../../fate-report-test.pdf',
+    '../../data/fate-report-test.pdf',
   );
   doc.pipe(fs.createWriteStream(outPath));
 
