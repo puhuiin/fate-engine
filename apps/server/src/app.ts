@@ -175,6 +175,12 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
       'X-XSS-Protection': '1; mode=block',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
       /**
+       * HSTS：强制客户端后续一段时间内的所有请求走 HTTPS，缓解 SSL Strip / 中间人降级攻击。
+       * 该头只能经 HTTP 响应下发（CSP 已由 Vite 构建期注入 meta，二者不冲突）；
+       * includeSubDomains + preload 进一步收紧，最长两年，生产反代需配套有效证书。
+       */
+      'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
+      /**
        * 跨源隔离纵深：COOP same-origin 防止恶意站点通过 window.opener 控制本页，
        * CORP same-origin 阻止其他源加载本域资源（响应体仅限同源/同站消费）。
        */
