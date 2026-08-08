@@ -39,6 +39,8 @@ const l2o = runL2(
 const l3 = runL3(l2.bazi);
 const l4 = runL4(l2.bazi);
 
+const deep = (l2.schools[0].data as { deep: { geju: { name: string; transGan: string | null }; yongShen: { yong: string; ji: string; tiaoHou: string }; shenSha: Array<{ name: string }>; xingChong: Array<{ type: string }>; shiErChangSheng: { positions: Array<{ position: string; stage: string }> }; touGan: Array<{ position: string; tou: string[] }> } }).deep;
+
 const checks: Array<[string, boolean]> = [
   ['L2 八流派并行', l2.schools.length === 8],
   ['L2 日主辛/金', l2.bazi.dayMaster.gan === '辛' && l2.bazi.dayMaster.wuxing === '金'],
@@ -205,6 +207,24 @@ const checks: Array<[string, boolean]> = [
   ['L4 六维评分', l4.dimensions.length === 6],
   ['L4 事业总分68', l4.dimensions.find((d) => d.key === 'career')?.total === 68],
   ['L4 结论强调人为主导', l4.summary.includes('人为')],
+  // L2 深度术数维度（V2）：格局/用神/神煞/刑冲合害/十二长生/藏干透干
+  ['L2 深度 格局=伤官格(月支亥)', deep.geju.name === '伤官格'],
+  ['L2 深度 伤官透干成格(壬)', deep.geju.transGan === '壬'],
+  ['L2 深度 用神倾向木(扶抑补缺)', deep.yongShen.yong === '木'],
+  ['L2 深度 忌神含金土', deep.yongShen.ji.includes('金') && deep.yongShen.ji.includes('土')],
+  ['L2 深度 冬生调候火', deep.yongShen.tiaoHou.includes('火')],
+  [
+    'L2 深度 神煞含天乙贵人/桃花/驿马/华盖/羊刃',
+    deep.shenSha.some((s) => s.name === '天乙贵人') &&
+      deep.shenSha.some((s) => s.name === '桃花') &&
+      deep.shenSha.some((s) => s.name === '驿马') &&
+      deep.shenSha.some((s) => s.name === '华盖') &&
+      deep.shenSha.some((s) => s.name === '羊刃'),
+  ],
+  ['L2 深度 刑冲合害含六害与相刑', deep.xingChong.some((x) => x.type === '六害') && deep.xingChong.some((x) => x.type === '相刑')],
+  ['L2 深度 十二长生含当前大运', deep.shiErChangSheng.positions.some((p) => p.position === '当前大运')],
+  ['L2 深度 日柱辛养于丑', deep.shiErChangSheng.positions.find((p) => p.position === '日柱')?.stage === '养'],
+  ['L2 深度 月支藏干壬透出', deep.touGan.find((t) => t.position === '月柱')?.tou.includes('壬')],
 ];
 
 // 排盘边界：晚子时（23:30）日柱不换、早子时（00:30）日柱切换

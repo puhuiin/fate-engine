@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildExportText, fmtHour } from '../pages/report/exportText';
-import type { L1Result, L4Result, L6Result, L8Result, RiskItem } from '../api/client';
+import type { L1Result, L2Result, L4Result, L6Result, L8Result, RiskItem } from '../api/client';
 
 const l1 = {
   normalized: {
@@ -185,6 +185,80 @@ describe('buildExportText 报告导出', () => {
     expect(text).toContain('【先看这里：三分钟读懂报告】');
     expect(text).toContain('【多线】四条命运线的契合参考');
     expect(text).toContain('修行（契合 100）：向内求索');
+  });
+
+  it('L2 八字深度维度输出格局/用神/神煞/刑冲/长生', () => {
+    const l2 = {
+      schools: [
+        {
+          school: '八字命理',
+          version: 'V2',
+          note: '',
+          data: {
+            deep: {
+              geju: {
+                name: '伤官格',
+                mainShiShen: '伤官',
+                transGan: '壬',
+                monthZhi: '亥',
+                note: '以月令亥本气壬透干成格',
+              },
+              yongShen: {
+                method: '扶抑',
+                yong: '木',
+                xi: '木',
+                ji: '金土',
+                tiaoHou: '火',
+                note: '',
+              },
+              shenSha: [
+                { name: '天乙贵人', position: '年柱', zi: '午' },
+                { name: '桃花', position: '年柱', zi: '午' },
+                { name: '驿马', position: '月柱', zi: '亥' },
+              ],
+              xingChong: [{ type: '六害', a: '子', b: '未' }],
+              shiErChangSheng: {
+                positions: [{ position: '日柱', zhi: '丑', stage: '养', tendency: '' }],
+              },
+              touGan: [{ position: '月柱', hideGan: ['壬'], tou: ['壬'] }],
+            },
+          },
+        },
+        { school: '纳音五行论命', version: 'V1', note: '', data: {} },
+      ],
+      conflicts: [],
+      schoolNote: '',
+      dayPrecisionOnly: false,
+      bazi: {
+        gender: 'male',
+        dayMaster: { gan: '辛', wuxing: '金' },
+        strength: '偏旺',
+        wuxingCount: { 金: 2, 木: 1, 水: 2, 火: 1, 土: 2 },
+        shishenStats: [],
+        xunKong: { xun: '', kong: '' },
+        taiYuan: '',
+        mingGong: '',
+        daYun: [],
+        currentDaYun: null,
+      },
+    } as unknown as L2Result;
+    const text = buildExportText({
+      l1: null,
+      l2,
+      l3: null,
+      l4: null,
+      l5: null,
+      l6: null,
+      l7: null,
+      l8: null,
+      l9: null,
+      risks: [],
+    });
+    expect(text).toContain('格局：伤官格（伤官透壬）');
+    expect(text).toContain('用神：用 木 · 喜 木 · 忌 金土 · 调候 火');
+    expect(text).toContain('神煞：天乙贵人、桃花、驿马');
+    expect(text).toContain('刑冲合害：六害子未');
+    expect(text).toContain('十二长生：日柱养');
   });
 
   it('未解锁时追加深度层标注，解锁后不追加', () => {

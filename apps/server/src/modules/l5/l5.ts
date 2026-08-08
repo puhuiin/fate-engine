@@ -5,6 +5,7 @@
  * 红线约定：不输出宿命式断言，全部指向「可解、可控、可成长」。
  */
 import type { BaziResult } from '../l2/bazi.js';
+import { runDeepAnalysis } from '../l2/deep.js';
 
 export interface KarmaPattern {
   name: string;
@@ -137,6 +138,19 @@ export function runL5(bazi: BaziResult): L5Output {
       cause: `日柱落「${bazi.xunKong.xun}」旬，空亡${bazi.xunKong.kong}。`,
       manifestation: '在对应宫位所代表的领域（如感情、内心世界）有时会出现「意犹未尽」的留白感。',
       root: '旬空在传统体系中指该宫位气机偏虚，实践中常见为「关注度不足」；主动在该领域投入注意力即可显著改善。',
+    });
+  }
+
+  // 地支互动（刑冲合害）：传统认为关系张力的提示，倾向性表述
+  const xc = runDeepAnalysis(bazi).xingChong;
+  const jie = xc.filter((x) => x.type === '六冲' || x.type === '六害' || x.type === '相刑');
+  if (jie.length > 0) {
+    const desc = jie.map((x) => `${x.a}${x.b ? `/${x.b}` : ''}`).join('；');
+    patterns.push({
+      name: '地支互动张力',
+      cause: `四柱地支间存在${jie.map((x) => x.type).join('、')}（${desc}）。`,
+      manifestation: '传统体系将地支冲刑害视为「内外张力的符号化提示」，常见表现为相关领域需要更高的沟通与调和技巧。',
+      root: '冲刑害描述的是一种「关系张力」，张力本身中性的——它既是摩擦点，也是突破点。练习在有张力的关系中先表达、再倾听，可显著化解。',
     });
   }
 

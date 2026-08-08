@@ -9,7 +9,7 @@ import type {
   L8Result,
   L9Result,
 } from '../../api/client';
-import type { RiskItem } from '../../api/client';
+import type { RiskItem, DeepL2 } from '../../api/client';
 import { buildPlainGuide } from './plain';
 
 export function fmtHour(h: number): string {
@@ -86,7 +86,21 @@ export function buildExportText(r: ExportInput, opts: { unlocked?: boolean } = {
   }
   if (r.l2) {
     lines.push('【L2 术数算力】');
-    for (const s of r.l2.schools) lines.push(`- ${s.school}（${s.version}）：${s.note}`);
+    for (const s of r.l2.schools) {
+      lines.push(`- ${s.school}（${s.version}）：${s.note}`);
+      if (s.school === '八字命理') {
+        const deep = (s.data as { deep?: DeepL2 }).deep;
+        if (deep) {
+          lines.push(
+            `  格局：${deep.geju.name}${deep.geju.transGan ? `（${deep.geju.mainShiShen}透${deep.geju.transGan}）` : ''}`,
+            `  用神：用 ${deep.yongShen.yong} · 喜 ${deep.yongShen.xi} · 忌 ${deep.yongShen.ji} · 调候 ${deep.yongShen.tiaoHou}`,
+            `  神煞：${deep.shenSha.length ? deep.shenSha.map((p) => p.name).join('、') : '无'}`,
+            `  刑冲合害：${deep.xingChong.length ? deep.xingChong.map((x) => `${x.type}${x.a}${x.b || ''}`).join('；') : '无明显'}`,
+            `  十二长生：${deep.shiErChangSheng.positions.map((p) => `${p.position}${p.stage}`).join(' ')}`,
+          );
+        }
+      }
+    }
     const b = r.l2.bazi;
     lines.push(
       `日主：${b.dayMaster.gan}（${b.dayMaster.wuxing}）· ${b.strength}`,

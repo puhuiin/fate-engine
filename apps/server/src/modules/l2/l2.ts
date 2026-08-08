@@ -11,6 +11,7 @@ import { buildLiuQin } from './liuqin.js';
 import { buildTiaoHou } from './tiaohou.js';
 import { buildBingYao } from './bingyao.js';
 import { buildXingChong } from './xingchong.js';
+import { runDeepAnalysis } from './deep.js';
 
 export interface L2School {
   school: string;
@@ -52,6 +53,7 @@ export function runL2(
   currentYear?: number,
 ): L2Output {
   const bazi = buildBazi(clockTime, gender, currentYear);
+  const deep = runDeepAnalysis(bazi);
 
   const pillarRows = ['year', 'month', 'day', 'time'].map((k) => {
     const p = bazi.pillars[k as keyof typeof bazi.pillars];
@@ -84,7 +86,7 @@ export function runL2(
     {
       school: '八字命理',
       version: 'V2',
-      note: '以日主（日干）为中心，考察四柱五行生克、十神结构与行运走势。',
+      note: '以日主（日干）为中心，考察四柱五行生克、十神结构与行运走势；附格局法、用神喜忌、神煞、十二长生、刑冲合害、藏干透干等深度维度。',
       data: {
         pillars: pillarRows,
         dayMaster: bazi.dayMaster,
@@ -98,6 +100,7 @@ export function runL2(
         taiXi: bazi.taiXi,
         daYun: bazi.daYun,
         currentDaYun: bazi.currentDaYun,
+        deep,
       },
     },
     {

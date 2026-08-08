@@ -205,6 +205,15 @@ const checks: Array<[string, boolean]> = [
     l2.bazi.daYun.length >= 5 &&
       l2.bazi.daYun.every((d, i, arr) => i === 0 || d.startYear >= arr[i - 1].endYear),
   ],
+  [
+    'L2 八字命理版本 V2 且含 deep 深度维度',
+    (() => {
+      const s = l2.schools.find((x) => x.school === '八字命理');
+      if (!s || s.version !== 'V2') return false;
+      const deep = (s.data as { deep?: { geju: { name: string }; yongShen: { yong: string } } }).deep;
+      return !!deep && deep.geju.name.length > 0 && deep.yongShen.yong.length > 0;
+    })(),
+  ],
 ];
 
 let failed = 0;

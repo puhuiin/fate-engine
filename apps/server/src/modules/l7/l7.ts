@@ -8,6 +8,7 @@ import type { L1Output } from '../l1/l1.js';
 import type { L2Output } from '../l2/l2.js';
 import type { L4Output } from '../l4/l4.js';
 import type { L5Output } from '../l5/l5.js';
+import type { DeepAnalysis } from '../l2/deep.js';
 
 export interface ConflictResolution {
   conflict: string;
@@ -46,8 +47,12 @@ export function runL7(l1: L1Output, l2: L2Output, l4: L4Output, l5: L5Output): L
   const topDimension = [...l4.dimensions].sort((a, b) => b.renwei - a.renwei)[0];
   const highManMade = [...l4.dimensions].filter((d) => d.renwei >= 60);
 
+  const deep = (l2.schools.find((s) => s.school === '八字命理')?.data as { deep?: DeepAnalysis })
+    ?.deep;
+  const gejuText = deep ? `，传统格局「${deep.geju.name}」、用神倾向「${deep.yongShen.yong}」（文化参考）` : '';
+
   const synthesis = [
-    `先天层面：日主${bazi.dayMaster.gan}（五行${bazi.dayMaster.wuxing}），四柱五行${bazi.strength}，以「${Object.entries(bazi.wuxingCount).sort((a, b) => b[1] - a[1])[0][0]}」为重心；L1 误差等级 ${l1.rating.grade}、置信度 ${l1.rating.confidence}%，结论强度以置信度为准。`,
+    `先天层面：日主${bazi.dayMaster.gan}（五行${bazi.dayMaster.wuxing}），四柱五行${bazi.strength}，以「${Object.entries(bazi.wuxingCount).sort((a, b) => b[1] - a[1])[0][0]}」为重心${gejuText}；L1 误差等级 ${l1.rating.grade}、置信度 ${l1.rating.confidence}%，结论强度以置信度为准。`,
     `流年层面：当前处「${bazi.currentDaYun?.ganzhi ?? '-'}」大运（${bazi.currentDaYun?.startYear ?? '-'}-${bazi.currentDaYun?.endYear ?? '-'}），行运节奏以「${l4.dimensions[0].liunian}」为基线，配合六维流年分综合研判。`,
     `人为层面：六维中人为可控分全部 ≥${Math.min(...l4.dimensions.map((d) => d.renwei))}，其中「${topDimension.name}」主动空间最大；人为权重 50% 恒定过半。`,
     `卡点层面：主卡点为「${l5.mainKnot}」，化解路径已在 L5 给出，纳入 L8 七级方案执行。`,
@@ -59,6 +64,6 @@ export function runL7(l1: L1Output, l2: L2Output, l4: L4Output, l5: L5Output): L
     conflictResolution,
     synthesis,
     coreNote:
-      '内核声明：本报告所有结论均由固定版本规则生成（L1 V2 / L2 V1 / L3 V3 / L4 V3+V14 / L5 V4 / L7 V6 / L8 V13），外层版本冻结以保障一致性；内核保留迭代入口，规则升级走 kernel_log 记录与版本号递增，不影响已出报告的可追溯性。',
+      '内核声明：本报告所有结论均由固定版本规则生成（L1 V2 / L2 V2 / L3 V3 / L4 V3+V14 / L5 V5 / L7 V6 / L8 V13），外层版本冻结以保障一致性；内核保留迭代入口，规则升级走 kernel_log 记录与版本号递增，不影响已出报告的可追溯性。',
   };
 }

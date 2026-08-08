@@ -10,7 +10,7 @@ import type {
   L8Result,
   L9Result,
 } from '../../api/client';
-import type { PlanItem, RiskItem } from '../../api/client';
+import type { PlanItem, RiskItem, DeepL2 } from '../../api/client';
 import { GLOSSARY_L1, GLOSSARY_L2, PlainGlossary, TermPlain } from './plain';
 import { fmtHour } from './exportText';
 import { deriveShishen, deriveXiJi, rankDimensions } from './derive';
@@ -156,9 +156,9 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
   const bazi = l2.bazi;
   const xi = deriveXiJi(bazi);
   const shishenInsight = deriveShishen(bazi);
-  const pillars = (
-    l2.schools.find((s) => s.school === '八字命理')?.data as { pillars: PillarRow[] } | undefined
-  )?.pillars;
+  const baziSchool = l2.schools.find((s) => s.school === '八字命理');
+  const pillars = (baziSchool?.data as { pillars: PillarRow[] } | undefined)?.pillars;
+  const deep = (baziSchool?.data as { deep?: DeepL2 }).deep;
   const nayinSchool = l2.schools.find((s) => s.school === '纳音五行论命');
   const nayinData = nayinSchool?.data as
     { yearNaYin: string; dayNaYin: string; dayNaYinWuXing: string; profile: string } | undefined;
@@ -403,6 +403,84 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
           )}
         </div>
       </section>
+
+      {deep && (
+        <section className="deep-l2">
+          <h3>深度术数维度（V2）</h3>
+          <table className="kv">
+            <tbody>
+              <tr>
+                <td>
+                  <TermPlain term="格局" plain="传统命理以月令定格局，作为命局层次的文化参考" />
+                </td>
+                <td>
+                  {deep.geju.name}
+                  {deep.geju.transGan ? `（${deep.geju.mainShiShen}透${deep.geju.transGan}）` : ''}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <TermPlain term="用神喜忌" plain="传统为平衡命局所选的关键五行，象征性提示" />
+                </td>
+                <td>
+                  用 {deep.yongShen.yong} · 喜 {deep.yongShen.xi} · 忌 {deep.yongShen.ji}
+                </td>
+              </tr>
+              <tr>
+                <td>调候</td>
+                <td>{deep.yongShen.tiaoHou}</td>
+              </tr>
+              <tr>
+                <td>
+                  <TermPlain term="神煞" plain="桃花、驿马等传统星曜称谓，仅作文化标签" />
+                </td>
+                <td>
+                  {deep.shenSha.length
+                    ? deep.shenSha.map((s) => `${s.name}（${s.position}${s.zi}）`).join(' · ')
+                    : '四柱无神煞落宫'}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <TermPlain term="刑冲合害" plain="地支之间的传统互动关系，张力符号" />
+                </td>
+                <td>
+                  {deep.xingChong.length
+                    ? deep.xingChong
+                        .map((x) => `${x.type} ${x.a}${x.b ? `/${x.b}` : ''}`)
+                        .join('；')
+                    : '四柱地支无明显冲合刑害'}
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <TermPlain term="十二长生" plain="五行生长到消亡的十二阶段比喻" />
+                </td>
+                <td>
+                  {deep.shiErChangSheng.positions
+                    .map((p) => `${p.position}${p.zhi}${p.stage}`)
+                    .join(' · ')}
+                </td>
+              </tr>
+              <tr>
+                <td>藏干透干</td>
+                <td>
+                  {deep.touGan
+                    .map(
+                      (t) =>
+                        `${t.position}${t.hideGan.join('')}${
+                          t.tou.length ? `（透${t.tou.join('、')}）` : ''
+                        }`,
+                    )
+                    .join(' · ')}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="dim">{deep.geju.note}</p>
+          <p className="dim">{deep.yongShen.note}</p>
+        </section>
+      )}
 
       <section>
         <h3>纳音五行论命（V1）</h3>

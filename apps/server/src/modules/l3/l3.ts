@@ -5,6 +5,7 @@
  * 红线约定：不输出宿命论与恐吓话术，全部表述为可发展、可改变。
  */
 import type { BaziResult } from '../l2/bazi.js';
+import { runDeepAnalysis } from '../l2/deep.js';
 
 export interface PersonalityDimension {
   dimension: string;
@@ -87,10 +88,13 @@ export function runL3(bazi: BaziResult): L3Output {
     .map(([wx]) => GROWTH_PROFILE[wx])
     .filter(Boolean);
 
+  const deep = runDeepAnalysis(bazi);
   const behaviorLogic =
     `日主 ${bazi.dayMaster.gan}（五行属${bazi.dayMaster.wuxing}）为坐标：四柱五行${bazi.strength}，` +
     `五行分布以「${Object.entries(wc).sort((a, b) => b[1] - a[1])[0][0]}」为重心，` +
     `十神结构以「${bazi.shishenStats[0]?.name ?? '-'}」为显著特征。` +
+    `传统格局为「${deep.geju.name}」，用神倾向「${deep.yongShen.yong}」五行，` +
+    '提示在需要调和的方向上可多借助对应属性（此为文化隐喻参考，不构成行动指令）。' +
     '以上可作为理解个人行为偏好的一种文化化框架，实际行为仍主要由成长环境与主动选择塑造。';
 
   return {

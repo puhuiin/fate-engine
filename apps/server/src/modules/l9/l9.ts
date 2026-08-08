@@ -8,6 +8,7 @@ import type { BaziResult } from '../l2/bazi.js';
 import type { L4Output } from '../l4/l4.js';
 import type { L5Output } from '../l5/l5.js';
 import type { L7Output } from '../l7/l7.js';
+import { runDeepAnalysis } from '../l2/deep.js';
 
 export interface LifeLesson {
   title: string;
@@ -31,6 +32,7 @@ export function runL9(bazi: BaziResult, _l4: L4Output, l5: L5Output, _l7: L7Outp
     水: '洞察与流动——用敏锐看见趋势，用灵活适应变化。',
   };
   const nextDaYun = bazi.daYun.find((d) => d.index > (bazi.currentDaYun?.index ?? 0));
+  const yongShen = runDeepAnalysis(bazi).yongShen;
 
   const lifeLessons: LifeLesson[] = [
     {
@@ -49,7 +51,7 @@ export function runL9(bazi: BaziResult, _l4: L4Output, l5: L5Output, _l7: L7Outp
 
   return {
     lifeLessons,
-    essence: `你的人为主动空间（50%）始终大于先天与流年之和。最好的策略只有一句话：认清倾向，然后主动选择。`,
+    essence: `你的人为主动空间（50%）始终大于先天与流年之和。最好的策略只有一句话：认清倾向，然后主动选择。传统用神（五行「${yongShen.yong}」）提示在失衡方向上可主动补位，${yongShen.tiaoHou}——这些是文化隐喻层面的引导，真正决定结果的仍是你的行动。`,
     mantra: '命是地图，运是天气，路是自己走的。',
     finalNote:
       '声明：本报告基于传统命理框架生成，定位为文化娱乐与自我观察参考，不构成对未来的预测，亦不构成医疗、投资、法律等任何专业建议。人生结果由现实行动决定；若你正经历持续的情绪困扰，请务必寻求专业心理支持。',

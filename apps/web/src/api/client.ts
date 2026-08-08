@@ -184,6 +184,23 @@ export interface L1Result {
   rating: { grade: string; confidence: number; message: string; suggest: string[] };
 }
 
+export interface DeepL2 {
+  geju: {
+    name: string;
+    mainShiShen: string;
+    transGan: string | null;
+    monthZhi: string;
+    note: string;
+  };
+  yongShen: { method: string; yong: string; xi: string; ji: string; tiaoHou: string; note: string };
+  shenSha: Array<{ name: string; position: string; zi: string }>;
+  xingChong: Array<{ type: string; a: string; b: string }>;
+  shiErChangSheng: {
+    positions: Array<{ position: string; zhi: string; stage: string; tendency: string }>;
+  };
+  touGan: Array<{ position: string; hideGan: string[]; tou: string[] }>;
+}
+
 export interface L2Result {
   schools: Array<{
     school: string;
