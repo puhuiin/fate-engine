@@ -207,6 +207,30 @@ const l2: L2Result = {
         note: '病药论为分析视角之一。',
       },
     },
+    {
+      school: '刑冲合害',
+      version: 'V1',
+      note: '以干支关系考察。',
+      data: {
+        ganHe: [{ a: '甲', b: '己', pos: '年月', hua: '土', desc: '甲己合土，相吸凝聚。' }],
+        zhiHe: [],
+        zhiChong: [{ a: '子', b: '午', pos: '月日', desc: '子午相冲，主变动张力。' }],
+        zhiHai: [{ a: '午', b: '丑', pos: '年日', desc: '丑午相害，隐形摩擦。' }],
+        zhiXing: [
+          { a: '丑', b: '戌', pos: '日时', kind: '恃势之刑', desc: '丑戌恃势之刑，束缚反复。' },
+        ],
+        sanHe: [
+          { zhis: ['申', '子', '辰'], pos: '四柱地支', name: '水局', desc: '申子辰三合水局。' },
+        ],
+        sanHui: [],
+        daYunJiao: [
+          { dir: '大运', ganzhi: '甲寅', kind: '六合', desc: '大运甲寅之寅与月柱亥六合。' },
+        ],
+        summary:
+          '本命干支关系：天干五合1处（甲己）、六冲1处（子午）、六害1处（午丑）、三刑1处（丑戌）。',
+        note: '刑冲合害属结构分析视角。',
+      },
+    },
   ],
   conflicts: ['神煞格局、十神六亲均以八字四柱为坐标，与八字流派同源一致。'],
   schoolNote: '多流派并行。',
@@ -214,8 +238,8 @@ const l2: L2Result = {
   bazi: baseBazi,
 };
 
-describe('Layer2 七流派渲染', () => {
-  it('渲染 7 个流派区块', () => {
+describe('Layer2 八流派渲染', () => {
+  it('渲染 8 个流派区块', () => {
     render(<Layer2 l2={l2} />);
     expect(screen.getByText('八字命理（V2）')).toBeTruthy();
     expect(screen.getByText('纳音五行论命（V1）')).toBeTruthy();
@@ -224,6 +248,7 @@ describe('Layer2 七流派渲染', () => {
     expect(screen.getByText('十神六亲（V1）')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 3, name: /调候用神/ })).toBeTruthy();
     expect(screen.getByRole('heading', { level: 3, name: /病药论/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 3, name: /刑冲合害/ })).toBeTruthy();
   });
 
   it('渲染神煞命中明细', () => {
@@ -256,7 +281,7 @@ describe('Layer2 七流派渲染', () => {
 
   it('渲染病药论病与药', () => {
     render(<Layer2 l2={l2} />);
-    expect(screen.getByText('土')).toBeTruthy();
+    expect(screen.getAllByText('土').length > 0).toBeTruthy();
     expect(screen.getByText('过旺')).toBeTruthy();
     expect(screen.getByText('克')).toBeTruthy();
     expect(screen.getByText(/本命病在土偏旺与缺木，药取木、水/)).toBeTruthy();
@@ -270,5 +295,15 @@ describe('Layer2 七流派渲染', () => {
   it('渲染多流派冲突溯源', () => {
     render(<Layer2 l2={l2} />);
     expect(screen.getByText('多流派冲突溯源')).toBeTruthy();
+  });
+
+  it('渲染刑冲合害关系明细', () => {
+    render(<Layer2 l2={l2} />);
+    expect(screen.getByText('甲己')).toBeTruthy();
+    expect(screen.getByText('子午')).toBeTruthy();
+    expect(screen.getByText('午丑')).toBeTruthy();
+    expect(screen.getByText('恃势之刑')).toBeTruthy();
+    expect(screen.getByText(/申子辰三合成水局/)).toBeTruthy();
+    expect(screen.getByText('甲寅')).toBeTruthy();
   });
 });

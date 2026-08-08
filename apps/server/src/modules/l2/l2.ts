@@ -1,7 +1,7 @@
 /**
  * L2 术数算力池（V2）
  * 多流派并行原始测算：八字命理、纳音五行论命、神煞格局、五运六气、十神六亲、
- * 调候用神（穷通宝鉴）、病药论（神峰通考），
+ * 调候用神（穷通宝鉴）、病药论（神峰通考）、刑冲合害，
  * 输出原始数据 + 流派口径说明；冲突项交由 L7 元规则内核归一。
  */
 import { buildBazi, type BaziResult } from './bazi.js';
@@ -10,6 +10,7 @@ import { buildWuYunLiuQi } from './wuyunliuqi.js';
 import { buildLiuQin } from './liuqin.js';
 import { buildTiaoHou } from './tiaohou.js';
 import { buildBingYao } from './bingyao.js';
+import { buildXingChong } from './xingchong.js';
 
 export interface L2School {
   school: string;
@@ -77,6 +78,7 @@ export function runL2(
   const liuqin = buildLiuQin(bazi);
   const tiaohou = buildTiaoHou(bazi);
   const bingyao = buildBingYao(bazi);
+  const xingchong = buildXingChong(bazi);
 
   const schools: L2School[] = [
     {
@@ -138,6 +140,12 @@ export function runL2(
       version: 'V1',
       note: '以五行失衡为病、制化补益为药（神峰通考），与旺衰喜忌相互印证。',
       data: bingyao,
+    },
+    {
+      school: '刑冲合害',
+      version: 'V1',
+      note: '考察四柱干支间天干五合、地支六合/六冲/六害/三刑/三合三会，并核对当前大运互动。',
+      data: xingchong,
     },
   ];
 

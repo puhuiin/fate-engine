@@ -224,6 +224,21 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
       }
     | undefined;
 
+  const xingchongData = l2.schools.find((s) => s.school === '刑冲合害')?.data as
+    | {
+        ganHe: Array<{ a: string; b: string; pos: string; hua: string; desc: string }>;
+        zhiHe: Array<{ a: string; b: string; pos: string; hua: string; desc: string }>;
+        zhiChong: Array<{ a: string; b: string; pos: string; desc: string }>;
+        zhiHai: Array<{ a: string; b: string; pos: string; desc: string }>;
+        zhiXing: Array<{ a: string; b: string; pos: string; kind: string; desc: string }>;
+        sanHe: Array<{ zhis: string[]; pos: string; name: string; desc: string }>;
+        sanHui: Array<{ zhis: string[]; pos: string; name: string; desc: string }>;
+        daYunJiao: Array<{ dir: string; ganzhi: string; kind: string; desc: string }>;
+        summary: string;
+        note: string;
+      }
+    | undefined;
+
   return (
     <div className="l2-report">
       <p className="hint">{l2.schoolNote}</p>
@@ -631,6 +646,162 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
           </>
         ) : (
           <p className="dim">暂无病药论数据。</p>
+        )}
+      </section>
+
+      <section>
+        <h3>
+          刑冲合害（
+          <TermPlain term="干支关系" plain="天干五合、地支六合/六冲/六害/三刑/三合三会" />
+          V1）
+        </h3>
+        {xingchongData ? (
+          <>
+            {xingchongData.ganHe.length > 0 && (
+              <table className="kv">
+                <thead>
+                  <tr>
+                    <th>天干五合</th>
+                    <th>位置</th>
+                    <th>合化</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {xingchongData.ganHe.map((g) => (
+                    <tr key={g.a + g.b + g.pos}>
+                      <td className="strong">{g.a + g.b}</td>
+                      <td>{g.pos}</td>
+                      <td>
+                        {g.hua} <span className="dim">{g.desc}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {xingchongData.zhiHe.length > 0 && (
+              <table className="kv">
+                <thead>
+                  <tr>
+                    <th>地支六合</th>
+                    <th>位置</th>
+                    <th>合化</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {xingchongData.zhiHe.map((z) => (
+                    <tr key={z.a + z.b + z.pos}>
+                      <td className="strong">{z.a + z.b}</td>
+                      <td>{z.pos}</td>
+                      <td>
+                        {z.hua} <span className="dim">{z.desc}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {xingchongData.zhiChong.length > 0 && (
+              <table className="kv">
+                <thead>
+                  <tr>
+                    <th>六冲</th>
+                    <th>位置</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {xingchongData.zhiChong.map((z) => (
+                    <tr key={z.a + z.b + z.pos}>
+                      <td className="strong">{z.a + z.b}</td>
+                      <td>
+                        {z.pos} <span className="dim">{z.desc}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {xingchongData.zhiHai.length > 0 && (
+              <table className="kv">
+                <thead>
+                  <tr>
+                    <th>六害</th>
+                    <th>位置</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {xingchongData.zhiHai.map((z) => (
+                    <tr key={z.a + z.b + z.pos}>
+                      <td className="strong">{z.a + z.b}</td>
+                      <td>
+                        {z.pos} <span className="dim">{z.desc}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {xingchongData.zhiXing.length > 0 && (
+              <table className="kv">
+                <thead>
+                  <tr>
+                    <th>三刑/自刑</th>
+                    <th>位置</th>
+                    <th>刑名</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {xingchongData.zhiXing.map((z) => (
+                    <tr key={z.a + z.b + z.pos + z.kind}>
+                      <td className="strong">{z.a + z.b}</td>
+                      <td>{z.pos}</td>
+                      <td>
+                        {z.kind} <span className="dim">{z.desc}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {xingchongData.sanHe.length > 0 &&
+              xingchongData.sanHe.map((s) => (
+                <p key={s.name} className="summary">
+                  {s.zhis.join('')}三合成{s.name}：{s.desc}
+                </p>
+              ))}
+            {xingchongData.sanHui.length > 0 &&
+              xingchongData.sanHui.map((s) => (
+                <p key={s.name} className="summary">
+                  {s.zhis.join('')}三会{s.name}：{s.desc}
+                </p>
+              ))}
+            {xingchongData.daYunJiao.length > 0 && (
+              <table className="kv">
+                <thead>
+                  <tr>
+                    <th>大运互动</th>
+                    <th>干支</th>
+                    <th>关系</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {xingchongData.daYunJiao.map((x, i) => (
+                    <tr key={i}>
+                      <td className="strong">{x.dir}</td>
+                      <td>{x.ganzhi}</td>
+                      <td>
+                        {x.kind} <span className="dim">{x.desc}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className="summary">{xingchongData.summary}</p>
+            <p className="hint">{xingchongData.note}</p>
+          </>
+        ) : (
+          <p className="dim">暂无刑冲合害数据。</p>
         )}
       </section>
 

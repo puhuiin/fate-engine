@@ -40,7 +40,7 @@ const l3 = runL3(l2.bazi);
 const l4 = runL4(l2.bazi);
 
 const checks: Array<[string, boolean]> = [
-  ['L2 七流派并行', l2.schools.length === 7],
+  ['L2 八流派并行', l2.schools.length === 8],
   ['L2 日主辛/金', l2.bazi.dayMaster.gan === '辛' && l2.bazi.dayMaster.wuxing === '金'],
   [
     'L2 当前大运甲寅2025-2034',
@@ -149,6 +149,45 @@ const checks: Array<[string, boolean]> = [
       const t = l2.schools.find((s) => s.school === '调候用神')?.data as { use?: string[] };
       const b = l2.schools.find((s) => s.school === '病药论')?.data as { yaos?: unknown[] };
       return (t?.use?.length ?? 0) > 0 && (b?.yaos?.length ?? 0) > 0;
+    })(),
+  ],
+  [
+    'L2 刑冲合害 年日丑午相害',
+    (() => {
+      const x = l2.schools.find((s) => s.school === '刑冲合害')?.data as {
+        zhiHai?: Array<{ a: string; b: string }>;
+      };
+      return (x?.zhiHai ?? []).some((h) => h.a === '午' && h.b === '丑');
+    })(),
+  ],
+  [
+    'L2 刑冲合害 日时丑戌恃势之刑',
+    (() => {
+      const x = l2.schools.find((s) => s.school === '刑冲合害')?.data as {
+        zhiXing?: Array<{ a: string; b: string; kind: string }>;
+      };
+      return (x?.zhiXing ?? []).some((z) => z.a === '丑' && z.b === '戌' && z.kind === '恃势之刑');
+    })(),
+  ],
+  [
+    'L2 刑冲合害 天干无合/无六冲',
+    (() => {
+      const x = l2.schools.find((s) => s.school === '刑冲合害')?.data as {
+        ganHe?: unknown[];
+        zhiChong?: unknown[];
+      };
+      return (x?.ganHe?.length ?? 0) === 0 && (x?.zhiChong?.length ?? 0) === 0;
+    })(),
+  ],
+  [
+    'L2 刑冲合害 大运甲寅与月支亥六合',
+    (() => {
+      const x = l2.schools.find((s) => s.school === '刑冲合害')?.data as {
+        daYunJiao?: Array<{ kind: string; ganzhi: string; desc: string }>;
+      };
+      return (x?.daYunJiao ?? []).some(
+        (d) => d.kind === '六合' && d.ganzhi === '甲寅' && d.desc.includes('亥'),
+      );
     })(),
   ],
   ['L3 五维人格', l3.personality.length === 5],

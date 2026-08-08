@@ -718,6 +718,10 @@ function renderL2(doc: PDFKit.PDFDocument, d: L2Output): void {
       renderBingYaoPdf(doc, s);
       continue;
     }
+    if (s.school === '刑冲合害') {
+      renderXingChongPdf(doc, s);
+      continue;
+    }
     section(doc, `${s.school}（${s.version}）`);
     if (s.note) para(doc, s.note, 14);
     if (s.data) {
@@ -859,6 +863,91 @@ function renderBingYaoPdf(doc: PDFKit.PDFDocument, s: { note: string; data: obje
     );
   }
   noteBlock(doc, d.summary, '病药结论');
+  noteBlock(doc, d.note, '口径说明');
+}
+
+function renderXingChongPdf(doc: PDFKit.PDFDocument, s: { note: string; data: object }): void {
+  section(doc, '刑冲合害（V1 · 干支关系）');
+  if (s.note) para(doc, s.note, 14);
+  const d = s.data as {
+    ganHe: Array<{ a: string; b: string; pos: string; hua: string; desc: string }>;
+    zhiHe: Array<{ a: string; b: string; pos: string; hua: string; desc: string }>;
+    zhiChong: Array<{ a: string; b: string; pos: string; desc: string }>;
+    zhiHai: Array<{ a: string; b: string; pos: string; desc: string }>;
+    zhiXing: Array<{ a: string; b: string; pos: string; kind: string; desc: string }>;
+    sanHe: Array<{ zhis: string[]; pos: string; name: string; desc: string }>;
+    sanHui: Array<{ zhis: string[]; pos: string; name: string; desc: string }>;
+    daYunJiao: Array<{ dir: string; ganzhi: string; kind: string; desc: string }>;
+    summary: string;
+    note: string;
+  };
+  if (d.ganHe.length > 0) {
+    section(doc, '天干五合');
+    table(
+      doc,
+      ['天干', '位置', '合化', '解读'],
+      d.ganHe.map((g) => [g.a + g.b, g.pos, g.hua, g.desc]),
+      [0.12, 0.12, 0.1, 0.66],
+    );
+  }
+  if (d.zhiHe.length > 0) {
+    section(doc, '地支六合');
+    table(
+      doc,
+      ['地支', '位置', '合化', '解读'],
+      d.zhiHe.map((z) => [z.a + z.b, z.pos, z.hua, z.desc]),
+      [0.12, 0.12, 0.1, 0.66],
+    );
+  }
+  if (d.zhiChong.length > 0) {
+    section(doc, '地支六冲');
+    table(
+      doc,
+      ['地支', '位置', '解读'],
+      d.zhiChong.map((z) => [z.a + z.b, z.pos, z.desc]),
+      [0.12, 0.12, 0.76],
+    );
+  }
+  if (d.zhiHai.length > 0) {
+    section(doc, '地支六害');
+    table(
+      doc,
+      ['地支', '位置', '解读'],
+      d.zhiHai.map((z) => [z.a + z.b, z.pos, z.desc]),
+      [0.12, 0.12, 0.76],
+    );
+  }
+  if (d.zhiXing.length > 0) {
+    section(doc, '地支三刑/自刑');
+    table(
+      doc,
+      ['地支', '位置', '刑名', '解读'],
+      d.zhiXing.map((z) => [z.a + z.b, z.pos, z.kind, z.desc]),
+      [0.12, 0.12, 0.16, 0.6],
+    );
+  }
+  if (d.sanHe.length > 0) {
+    section(doc, '三合局');
+    d.sanHe.forEach((s) =>
+      para(doc, `${s.zhis.join('')}三合成${s.name}（${s.pos}）：${s.desc}`, 14),
+    );
+  }
+  if (d.sanHui.length > 0) {
+    section(doc, '三会方');
+    d.sanHui.forEach((s) =>
+      para(doc, `${s.zhis.join('')}三会${s.name}（${s.pos}）：${s.desc}`, 14),
+    );
+  }
+  if (d.daYunJiao.length > 0) {
+    section(doc, '当前大运互动');
+    table(
+      doc,
+      ['方向', '干支', '关系', '解读'],
+      d.daYunJiao.map((x) => [x.dir, x.ganzhi, x.kind, x.desc]),
+      [0.1, 0.14, 0.12, 0.64],
+    );
+  }
+  noteBlock(doc, d.summary, '刑冲合害结论');
   noteBlock(doc, d.note, '口径说明');
 }
 
