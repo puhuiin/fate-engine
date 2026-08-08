@@ -36,7 +36,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 
-# 数据目录（SQLite 持久化卷）
+# 数据目录（SQLite 持久化卷）；运行时属主由入口脚本修正为 node 用户
 RUN mkdir -p /app/data
 VOLUME ["/app/data"]
 
@@ -45,4 +45,9 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" || exit 1
 
+# 降权运行：入口脚本先修正数据卷属主，再以非 root 的 node 用户（uid 1000）启动主进程，
+# 在不牺牲 SQLite 可写性的前提下缩小容器被攻破后的影响面。
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "dist/index.js"]
