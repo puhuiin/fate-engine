@@ -698,6 +698,18 @@ function renderL2(doc: PDFKit.PDFDocument, d: L2Output): void {
 
   for (const s of d.schools) {
     if (primary && s === primary) continue;
+    if (s.school === '神煞格局') {
+      renderShenShaPdf(doc, s);
+      continue;
+    }
+    if (s.school === '五运六气') {
+      renderWuYunLiuQiPdf(doc, s);
+      continue;
+    }
+    if (s.school === '十神六亲') {
+      renderLiuQinPdf(doc, s);
+      continue;
+    }
     section(doc, `${s.school}（${s.version}）`);
     if (s.note) para(doc, s.note, 14);
     if (s.data) {
@@ -715,6 +727,89 @@ function renderL2(doc: PDFKit.PDFDocument, d: L2Output): void {
   }
   if (d.schoolNote) noteBlock(doc, d.schoolNote, '流派口径说明');
   if (d.dayPrecisionOnly) noteBlock(doc, '本案例仅日级精度，时辰信息未参与排盘。', '精度提示');
+}
+
+function renderShenShaPdf(doc: PDFKit.PDFDocument, s: { note: string; data: object }): void {
+  section(doc, '神煞格局（V1）');
+  if (s.note) para(doc, s.note, 14);
+  const data = s.data as {
+    groups?: Array<{
+      group: string;
+      stars: Array<{ name: string; pillar: string; at: string; note: string }>;
+      interpretation: string;
+    }>;
+  };
+  for (const g of data.groups ?? []) {
+    section(doc, g.group);
+    if (g.stars.length > 0) {
+      for (const st of g.stars) listItem(doc, null, `${st.name}（${st.pillar}${st.at}）：${st.note}`);
+      para(doc, g.interpretation, 14);
+    } else {
+      para(doc, '该组未见显著命中。', 14);
+    }
+  }
+}
+
+function renderWuYunLiuQiPdf(
+  doc: PDFKit.PDFDocument,
+  s: { note: string; data: object },
+): void {
+  section(doc, '五运六气（V1）');
+  const data = s.data as {
+    zhongYun?: { name: string; phase: string; qi: string; note: string };
+    siTian?: { qi: string; note: string };
+    zaiQuan?: { qi: string; note: string };
+    keQi?: Array<{ step: string; qi: string }>;
+    zhuQi?: Array<{ step: string; qi: string }>;
+    xiangHe?: { name: string; note: string };
+    note?: string;
+  };
+  if (data.zhongYun) kv(doc, '中运', `${data.zhongYun.name}（${data.zhongYun.phase}）`);
+  if (data.siTian) kv(doc, '司天', data.siTian.qi);
+  if (data.zaiQuan) kv(doc, '在泉', data.zaiQuan.qi);
+  if (data.xiangHe) kv(doc, '运气相合', data.xiangHe.name);
+  if (data.keQi) {
+    section(doc, '客气六步（三之气即司天，终之气即在泉）');
+    table(
+      doc,
+      ['六步', '客气'],
+      data.keQi.map((k) => [k.step, k.qi]),
+      [0.25, 0.75],
+    );
+  }
+  if (data.zhuQi) {
+    section(doc, '主气六步（每年固定）');
+    table(
+      doc,
+      ['六步', '主气'],
+      data.zhuQi.map((k) => [k.step, k.qi]),
+      [0.25, 0.75],
+    );
+  }
+  if (data.zhongYun?.note) para(doc, data.zhongYun.note, 14);
+  if (data.xiangHe?.note) para(doc, data.xiangHe.note, 14);
+  if (data.siTian?.note) para(doc, data.siTian.note, 14);
+  if (data.zaiQuan?.note) para(doc, data.zaiQuan.note, 14);
+  if (data.note) noteBlock(doc, data.note, '口径说明');
+}
+
+function renderLiuQinPdf(doc: PDFKit.PDFDocument, s: { note: string; data: object }): void {
+  section(doc, '十神六亲（V1）');
+  const data = s.data as {
+    relatives?: Array<{ name: string; category: string; count: number; level: string; note: string }>;
+    summary?: string;
+    note?: string;
+  };
+  if (data.relatives) {
+    table(
+      doc,
+      ['六亲组', '十神', '强度', '解读'],
+      data.relatives.map((r) => [r.name, r.category, `${r.level}（${r.count}）`, r.note]),
+      [0.2, 0.12, 0.08, 0.6],
+    );
+  }
+  if (data.summary) para(doc, data.summary, 14);
+  if (data.note) noteBlock(doc, data.note, '口径说明');
 }
 
 function renderL3(doc: PDFKit.PDFDocument, d: L3Output): void {

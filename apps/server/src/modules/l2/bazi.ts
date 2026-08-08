@@ -52,6 +52,8 @@ export interface BaziResult {
   xunKong: { xun: string; kong: string };
   taiYuan: string;
   mingGong: string;
+  shenGong: string;
+  taiXi: string;
   daYun: DaYunItem[];
   currentDaYun: DaYunItem | null;
   birthYear: number;
@@ -206,6 +208,8 @@ export function buildBazi(
     xunKong: { xun: bz.getDayXun(), kong: bz.getDayXunKong() },
     taiYuan: bz.getTaiYuan(),
     mingGong: bz.getMingGong(),
+    shenGong: bz.getShenGong(),
+    taiXi: bz.getTaiXi(),
     daYun,
     currentDaYun,
     birthYear,

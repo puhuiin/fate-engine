@@ -203,6 +203,8 @@ export interface L2Result {
     xunKong: { xun: string; kong: string };
     taiYuan: string;
     mingGong: string;
+    shenGong: string;
+    taiXi: string;
     daYun: Array<{
       index: number;
       ganzhi: string;

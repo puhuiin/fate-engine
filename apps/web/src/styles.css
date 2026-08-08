@@ -651,6 +651,32 @@ table.kv thead th {
   font-weight: 700;
 }
 
+.shensha-group {
+  margin-bottom: 8px;
+}
+
+.qi-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.qi-item {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 13px;
+  background: #fffdf7;
+}
+
+.qi-item.active {
+  border-color: var(--gold);
+  background: #faf0d8;
+  color: #8a6d0b;
+  font-weight: 600;
+}
+
 /* L3 */
 .disenchant {
   background: #f4efe2;

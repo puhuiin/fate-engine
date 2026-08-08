@@ -1,15 +1,18 @@
 /**
- * L2 术数算力池（V1）
- * 多流派并行原始测算：现阶段实现「八字命理」与「纳音五行论命」两个流派，
+ * L2 术数算力池（V2）
+ * 多流派并行原始测算：八字命理、纳音五行论命、神煞格局、五运六气、十神六亲，
  * 输出原始数据 + 流派口径说明；冲突项交由 L7 元规则内核归一。
  */
 import { buildBazi, type BaziResult } from './bazi.js';
+import { buildShenSha } from './shensha.js';
+import { buildWuYunLiuQi } from './wuyunliuqi.js';
+import { buildLiuQin } from './liuqin.js';
 
 export interface L2School {
   school: string;
   version: string;
   note: string;
-  data: Record<string, unknown>;
+  data: object;
 }
 
 export interface L2Output {
@@ -66,10 +69,14 @@ export function runL2(
   const dayNaYinWx = naYinWuXing(dayNaYin);
   const dayMasterWx = bazi.dayMaster.wuxing;
 
+  const shensha = buildShenSha(bazi);
+  const wuyun = buildWuYunLiuQi(bazi.pillars.year.gan, bazi.pillars.year.zhi);
+  const liuqin = buildLiuQin(bazi);
+
   const schools: L2School[] = [
     {
       school: '八字命理',
-      version: 'V1',
+      version: 'V2',
       note: '以日主（日干）为中心，考察四柱五行生克、十神结构与行运走势。',
       data: {
         pillars: pillarRows,
@@ -80,6 +87,8 @@ export function runL2(
         xunKong: bazi.xunKong,
         taiYuan: bazi.taiYuan,
         mingGong: bazi.mingGong,
+        shenGong: bazi.shenGong,
+        taiXi: bazi.taiXi,
         daYun: bazi.daYun,
         currentDaYun: bazi.currentDaYun,
       },
@@ -95,6 +104,24 @@ export function runL2(
         profile: NAYIN_PROFILE[dayNaYinWx] ?? '纳音取象信息不足，仅供参考。',
       },
     },
+    {
+      school: '神煞格局',
+      version: 'V1',
+      note: '以日干/年支查天乙、文昌、禄神、羊刃、桃花、驿马、华盖、孤辰寡宿等神煞，作性格际遇的辅助视角。',
+      data: shensha,
+    },
+    {
+      school: '五运六气',
+      version: 'V1',
+      note: '以出生年干支推中运、司天、在泉与六步客气，观所禀时令气候底色。',
+      data: wuyun,
+    },
+    {
+      school: '十神六亲',
+      version: 'V1',
+      note: '以十神分布定位官印财食比六亲星强弱，观关系结构倾向。',
+      data: liuqin,
+    },
   ];
 
   // 多流派冲突溯源：八字以日干论命，纳音以日柱纳音论命
@@ -106,6 +133,10 @@ export function runL2(
   } else if (dayNaYinWx) {
     conflicts.push('八字与纳音两派主星五行一致，无显著冲突，可直接归一。');
   }
+  // 五运六气以年柱气化为坐标，与八字日主坐标系不同，属互补视角而非冲突
+  conflicts.push(
+    '神煞格局、十神六亲均以八字四柱（日干/年支）为坐标，与八字流派同源一致；五运六气以年柱干支气化为坐标，观察维度不同，纳入 L7 综合时按独立视角加权。',
+  );
 
   return {
     schools,

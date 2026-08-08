@@ -160,13 +160,44 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
   const nayinData = nayinSchool?.data as
     { yearNaYin: string; dayNaYin: string; dayNaYinWuXing: string; profile: string } | undefined;
 
+  const shenshaData = l2.schools.find((s) => s.school === '神煞格局')?.data as
+    | {
+        groups: Array<{
+          group: string;
+          stars: Array<{ name: string; pillar: string; at: string; note: string }>;
+          interpretation: string;
+        }>;
+        note: string;
+      }
+    | undefined;
+
+  const wuyunData = l2.schools.find((s) => s.school === '五运六气')?.data as
+    | {
+        zhongYun: { name: string; phase: string; qi: string; note: string };
+        siTian: { qi: string; note: string };
+        zaiQuan: { qi: string; note: string };
+        keQi: Array<{ step: string; qi: string }>;
+        zhuQi: Array<{ step: string; qi: string }>;
+        xiangHe: { name: string; note: string };
+        note: string;
+      }
+    | undefined;
+
+  const liuqinData = l2.schools.find((s) => s.school === '十神六亲')?.data as
+    | {
+        relatives: Array<{ name: string; category: string; count: number; level: string; note: string }>;
+        summary: string;
+        note: string;
+      }
+    | undefined;
+
   return (
     <div className="l2-report">
       <p className="hint">{l2.schoolNote}</p>
       {bazi.sectNote && <p className="dim">{bazi.sectNote}</p>}
 
       <section>
-        <h3>八字命理（V1）</h3>
+        <h3>八字命理（{l2.schools.find((s) => s.school === '八字命理')?.version ?? 'V1'}）</h3>
         <table className="pillars">
           <thead>
             <tr>
@@ -259,6 +290,16 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
                 {bazi.taiYuan} / {bazi.mingGong}
               </td>
             </tr>
+            {bazi.shenGong && (
+              <tr>
+                <td>
+                  <TermPlain term="身宫 / 胎息" plain="传统推演的身心主位坐标" />
+                </td>
+                <td>
+                  {bazi.shenGong} / {bazi.taiXi}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
         <div>
@@ -305,6 +346,124 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
             </tr>
           </tbody>
         </table>
+      </section>
+
+      <section>
+        <h3>神煞格局（V1）</h3>
+        {shenshaData ? (
+          <>
+            {shenshaData.groups.map((g) => (
+              <div key={g.group} className="shensha-group">
+                <p className="sub-title">{g.group}</p>
+                {g.stars.length > 0 ? (
+                  <ul>
+                    {g.stars.map((s, i) => (
+                      <li key={i}>
+                        <strong>
+                          {s.name}（{s.pillar}
+                          {s.at}）
+                        </strong>
+                        {s.note && <span className="dim"> {s.note}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="dim">该组未见显著命中。</p>
+                )}
+                <p className="dim">{g.interpretation}</p>
+              </div>
+            ))}
+            <p className="hint">{shenshaData.note}</p>
+          </>
+        ) : (
+          <p className="dim">暂无神煞数据。</p>
+        )}
+      </section>
+
+      <section>
+        <h3>五运六气（V1）</h3>
+        {wuyunData ? (
+          <>
+            <table className="kv">
+              <tbody>
+                <tr>
+                  <td>
+                    <TermPlain term="中运" plain="出生年五运六气的大气候底色" />
+                  </td>
+                  <td>
+                    {wuyunData.zhongYun.name}（{wuyunData.zhongYun.phase}）
+                  </td>
+                </tr>
+                <tr>
+                  <td>司天</td>
+                  <td>{wuyunData.siTian.qi}</td>
+                </tr>
+                <tr>
+                  <td>在泉</td>
+                  <td>{wuyunData.zaiQuan.qi}</td>
+                </tr>
+                <tr>
+                  <td>
+                    <TermPlain term="运气相合" plain="岁运与司天五行关系" />
+                  </td>
+                  <td>
+                    <strong>{wuyunData.xiangHe.name}</strong>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="sub-title">客气六步（三之气即司天，终之气即在泉）</p>
+            <div className="qi-grid">
+              {wuyunData.keQi.map((k, i) => (
+                <span key={i} className={`qi-item ${i === 2 ? 'active' : ''}`}>
+                  {k.step}：{k.qi}
+                </span>
+              ))}
+            </div>
+            <p className="sub-title">主气六步（每年固定）</p>
+            <div className="qi-grid">
+              {wuyunData.zhuQi.map((k, i) => (
+                <span key={i} className="qi-item">
+                  {k.step}：{k.qi}
+                </span>
+              ))}
+            </div>
+            <p className="dim">{wuyunData.zhongYun.note}</p>
+            <p className="dim">{wuyunData.xiangHe.note}</p>
+            <p className="dim">{wuyunData.siTian.note}</p>
+            <p className="dim">{wuyunData.zaiQuan.note}</p>
+            <p className="hint">{wuyunData.note}</p>
+          </>
+        ) : (
+          <p className="dim">暂无五运六气数据。</p>
+        )}
+      </section>
+
+      <section>
+        <h3>十神六亲（V1）</h3>
+        {liuqinData ? (
+          <>
+            <table className="kv">
+              <tbody>
+                {liuqinData.relatives.map((r) => (
+                  <tr key={r.name}>
+                    <td>{r.name}</td>
+                    <td>
+                      <strong>
+                        {r.level}（{r.count}）
+                      </strong>
+                      <span className="dim"> {r.note}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="summary">{liuqinData.summary}</p>
+            <p className="hint">{liuqinData.note}</p>
+          </>
+        ) : (
+          <p className="dim">暂无十神六亲数据。</p>
+        )}
       </section>
 
       {l2.conflicts.length > 0 && (

@@ -40,7 +40,7 @@ const l3 = runL3(l2.bazi);
 const l4 = runL4(l2.bazi);
 
 const checks: Array<[string, boolean]> = [
-  ['L2 双流派', l2.schools.length === 2],
+  ['L2 五流派并行', l2.schools.length === 5],
   ['L2 日主辛/金', l2.bazi.dayMaster.gan === '辛' && l2.bazi.dayMaster.wuxing === '金'],
   [
     'L2 当前大运甲寅2025-2034',
@@ -51,6 +51,55 @@ const checks: Array<[string, boolean]> = [
   ['L2 阴阳顺逆方向不同', l2.bazi.daYun[0].ganzhi !== l2f.bazi.daYun[0].ganzhi],
   ['L2 未知性别按男命处理', l2o.bazi.daYun[0].ganzhi === l2.bazi.daYun[0].ganzhi],
   ['L2 冲突溯源存在', l2.conflicts.length > 0],
+  ['L2 八字补身宫/胎息', !!l2.bazi.shenGong && !!l2.bazi.taiXi],
+  [
+    'L2 神煞天乙贵人（辛→午）落年支',
+    (() => {
+      const g = l2.schools.find((s) => s.school === '神煞格局')?.data as {
+        groups?: Array<{ stars: Array<{ name: string; pillar: string }> }>;
+      };
+      return !!g?.groups?.some((x) =>
+        x.stars.some((st) => st.name === '天乙贵人' && st.pillar.includes('年')),
+      );
+    })(),
+  ],
+  [
+    'L2 五运六气 壬午→木运太过',
+    (() => {
+      const w = l2.schools.find((s) => s.school === '五运六气')?.data as {
+        zhongYun?: { name: string; phase: string };
+      };
+      return w?.zhongYun?.name === '木运' && w.zhongYun.phase === '太过';
+    })(),
+  ],
+  [
+    'L2 五运六气 午→少阴君火司天/阳明燥金在泉',
+    (() => {
+      const w = l2.schools.find((s) => s.school === '五运六气')?.data as {
+        siTian?: { qi: string };
+        zaiQuan?: { qi: string };
+      };
+      return w?.siTian?.qi === '少阴君火' && w?.zaiQuan?.qi === '阳明燥金';
+    })(),
+  ],
+  [
+    'L2 五运六气 客气三之气=司天/终之气=在泉',
+    (() => {
+      const w = l2.schools.find((s) => s.school === '五运六气')?.data as {
+        keQi?: Array<{ step: string; qi: string }>;
+      };
+      return w?.keQi?.[2]?.qi === '少阴君火' && w?.keQi?.[5]?.qi === '阳明燥金';
+    })(),
+  ],
+  [
+    'L2 十神六亲五组',
+    (() => {
+      const q = l2.schools.find((s) => s.school === '十神六亲')?.data as {
+        relatives?: unknown[];
+      };
+      return q?.relatives?.length === 5;
+    })(),
+  ],
   ['L3 五维人格', l3.personality.length === 5],
   ['L3 祛魅声明存在', l3.disenchantNote.includes('文化隐喻')],
   [
