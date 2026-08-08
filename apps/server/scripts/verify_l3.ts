@@ -113,6 +113,9 @@ const checks: Array<[string, boolean]> = [
   ],
   ['L6 标准模式不输出行运窗口', l6.depthWindows === undefined],
   ['L6 深度模式窗口含年份区间', (l6Quantum.depthWindows?.[0]?.windows[0] ?? '').includes('-')],
+  ['L4 深度补位提示含用神五行', l4.depthNote.includes('木') && l4.depthNote.includes('文化参考')],
+  ['L6 深度模式分叉点含用神研判', l6Quantum.branchPoints.every((bp) => bp.insight && bp.insight.includes('文化参考'))],
+  ['L6 标准模式分叉点无研判', l6.branchPoints.every((bp) => !bp.insight)],
 ];
 
 let failed = 0;

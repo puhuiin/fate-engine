@@ -1018,6 +1018,12 @@ function Layer4Raw({ l4 }: { l4: L4Result }) {
           <p>{l4.summary}</p>
         </div>
       </section>
+      {l4.depthNote && (
+        <section>
+          <h3>用神补位提示（深度维度）</h3>
+          <p className="dim">{l4.depthNote}</p>
+        </section>
+      )}
     </div>
   );
 }
@@ -1217,6 +1223,7 @@ function Layer6Raw({ l6, risks }: { l6: L6Result; risks: RiskItem[] }) {
               <th>进入线</th>
               <th>选择 B</th>
               <th>进入线</th>
+              {l6.branchPoints.some((b) => b.insight) && <th>用神研判</th>}
             </tr>
           </thead>
           <tbody>
@@ -1230,6 +1237,7 @@ function Layer6Raw({ l6, risks }: { l6: L6Result; risks: RiskItem[] }) {
                 <td className="strong">{b.pathA}</td>
                 <td>{b.decisionB}</td>
                 <td className="strong">{b.pathB}</td>
+                {b.insight && <td className="dim">{b.insight}</td>}
               </tr>
             ))}
           </tbody>

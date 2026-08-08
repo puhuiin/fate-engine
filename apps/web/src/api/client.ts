@@ -262,6 +262,8 @@ export interface L4Result {
     advice: string;
   }>;
   summary: string;
+  /** 深度维度：用神五行对应的六维补位提示（倾向性文化参考） */
+  depthNote?: string;
 }
 
 export interface L5Result {
@@ -304,6 +306,7 @@ export interface L6Result {
     pathA: string;
     decisionB: string;
     pathB: string;
+    insight?: string;
   }>;
   depthWindows?: Array<{ line: string; windows: string[] }>;
   note: string;

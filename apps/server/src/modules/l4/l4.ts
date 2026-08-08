@@ -5,6 +5,7 @@
  * 红线约定：人为权重恒定过半，明确「人为主导」。
  */
 import type { BaziResult } from '../l2/bazi.js';
+import { runDeepAnalysis } from '../l2/deep.js';
 
 export interface L4Dimension {
   key: string;
@@ -20,6 +21,8 @@ export interface L4Output {
   weightModel: { xiantian: number; liunian: number; renwei: number; note: string };
   dimensions: L4Dimension[];
   summary: string;
+  /** 深度维度：用神五行对应的六维补位提示（倾向性文化参考） */
+  depthNote: string;
 }
 
 /** 权重模型：后台可动态浮动（当前固定 30/20/50） */
@@ -50,10 +53,20 @@ function balanceScore(wc: Record<string, number>): number {
   return clamp(68 - variance * 8, 45, 88);
 }
 
+/** 用神五行对应的六维补位建议（倾向性文化参考） */
+const WX_DEPTH_ADVICE: Record<string, string> = {
+  木: '木主生长与开创，事业与财富维度可多往「成长型、创新性」方向补位；人际与健康上以「舒展、规律」为基调。',
+  火: '火主热情与传播，事业与人际可多往「表达、影响、服务」方向补位；决策维度以「想清楚再行动」为节奏。',
+  土: '土主承载与稳定，财富与健康可多往「积累、深耕、固定资产」方向补位；事业以「守正出奇」为基调。',
+  金: '金主规则与精进，事业与决策可多往「专业、规范、打磨细节」方向补位；人际上以「坦诚直接」为基调。',
+  水: '水主灵动与连接，人际与财富可多往「信息、流通、跨领域协作」方向补位；决策以「灵活留白」为基调。',
+};
+
 export function runL4(bazi: BaziResult): L4Output {
   const wc = bazi.wuxingCount;
   const dayWx = bazi.dayMaster.wuxing;
   const shishen = bazi.shishenStats;
+  const deep = runDeepAnalysis(bazi);
 
   const countOf = (name: string) => shishen.find((s) => s.name === name)?.count ?? 0;
   const guanSha = countOf('正官') + countOf('七杀');
@@ -210,5 +223,8 @@ export function runL4(bazi: BaziResult): L4Output {
     dimensions: dims,
     summary:
       '在任何维度，人为因素（50%）都大于先天与流年之和（合计 50%）。先天只提示倾向，流年只标记节奏，真正决定结果的，是人在日常选择中的主动作为。',
+    depthNote: `传统用神为「${deep.yongShen.yong}」（${deep.yongShen.method}，${deep.yongShen.tiaoHou}，文化参考）：${
+      WX_DEPTH_ADVICE[deep.yongShen.yong] ?? '各维度保持平衡补位即可，无需迷信单一五行。'
+    }用神只是传统体系里的一个参照系，分数与建议以「人为主导」为准。`,
   };
 }

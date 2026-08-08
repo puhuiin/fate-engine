@@ -80,7 +80,9 @@ Updated: 2026-08-08
 #### Acceptance Criteria
 
 1. WHEN L2 深度维度产出，THEN L3 人格 SHALL 结合用神/格局给出「倾向倾向」引申，报告描述更深入。
-2. WHEN L2 深度维度产出，THEN L5 因果溯源 SHALL 结合地支刑冲合害/空亡给出「关系互动」维度卡点。
-3. WHEN L2 深度维度产出，THEN L7 元规则 SHALL 引用格局作为裁定依据之一。
-4. WHEN L2 深度维度产出，THEN L9 实相兜底 SHALL 结合用神/调候给出收束指引。
-5. WHEN 任一上层引用深度维度，THEN 引用 SHALL 保持与新增维度一致（确定性、倾向性、祛魅）。
+2. WHEN L2 深度维度产出，THEN L4 六维落地 SHALL 结合用神给出六维补位提示（depthNote）。
+3. WHEN L2 深度维度产出，THEN L5 因果溯源 SHALL 结合地支刑冲合害/空亡给出「关系互动」维度卡点。
+4. WHEN L2 深度维度产出，THEN L6 量子多线 SHALL 在深度模式下结合用神与大运干支生克给出分叉点研判（insight）。
+5. WHEN L2 深度维度产出，THEN L7 元规则 SHALL 引用格局作为裁定依据之一。
+6. WHEN L2 深度维度产出，THEN L9 实相兜底 SHALL 结合用神/调候给出收束指引。
+7. WHEN 任一上层引用深度维度，THEN 引用 SHALL 保持与新增维度一致（确定性、倾向性、祛魅）。

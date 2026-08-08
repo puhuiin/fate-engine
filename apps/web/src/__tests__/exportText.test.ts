@@ -261,6 +261,57 @@ describe('buildExportText 报告导出', () => {
     expect(text).toContain('十二长生：日柱养');
   });
 
+  it('L4 深度补位提示与 L6 分叉点用神研判输出', () => {
+    const l4 = {
+      weightModel: { xiantian: 0.3, liunian: 0.2, renwei: 0.5, note: '' },
+      dimensions: [
+        {
+          key: 'career',
+          name: '事业',
+          xiantian: 60,
+          liunian: 70,
+          renwei: 80,
+          total: 68,
+          advice: '稳中求进',
+        },
+      ],
+      summary: '综合尚可',
+      depthNote: '传统用神为「木」（文化参考）：木主生长与开创。',
+    } as unknown as L4Result;
+    const l6 = {
+      lines: [
+        { name: '稳进线', fit: 61, strategy: '深耕' },
+        { name: '破局线', fit: 85, strategy: '创新' },
+      ],
+      branchPoints: [
+        {
+          year: 2035,
+          decisionA: '深耕',
+          pathA: '稳进线',
+          decisionB: '转型',
+          pathB: '破局线',
+          insight: '此运天干乙（木）与用神同气，可放心深耕（文化参考）。',
+        },
+      ],
+      depthWindows: [],
+      note: '',
+    } as unknown as L6Result;
+    const text = buildExportText({
+      l1: null,
+      l2: null,
+      l3: null,
+      l4,
+      l5: null,
+      l6,
+      l7: null,
+      l8: null,
+      l9: null,
+      risks: [],
+    });
+    expect(text).toContain('用神补位：传统用神为「木」');
+    expect(text).toContain('分叉点 2035：A=深耕→稳进线 / B=转型→破局线；研判：此运天干乙（木）');
+  });
+
   it('未解锁时追加深度层标注，解锁后不追加', () => {
     const input = {
       l1: null,

@@ -121,6 +121,7 @@ export function buildExportText(r: ExportInput, opts: { unlocked?: boolean } = {
       `权重：先天${r.l4.weightModel.xiantian * 100}% / 流年${r.l4.weightModel.liunian * 100}% / 人为${r.l4.weightModel.renwei * 100}%`,
     );
     for (const d of r.l4.dimensions) lines.push(`- ${d.name}：${d.total}（${d.advice}）`);
+    if (r.l4.depthNote) lines.push(`用神补位：${r.l4.depthNote}`);
     lines.push('', r.l4.summary, '');
   }
   if (r.l5) {
@@ -131,10 +132,12 @@ export function buildExportText(r: ExportInput, opts: { unlocked?: boolean } = {
   if (r.l6) {
     lines.push('【L6 量子多线】');
     for (const ln of r.l6.lines) lines.push(`- ${ln.name}（契合 ${ln.fit}）：${ln.strategy}`);
-    for (const bp of r.l6.branchPoints)
+    for (const bp of r.l6.branchPoints) {
+      const insight = bp.insight ? `；研判：${bp.insight}` : '';
       lines.push(
-        `分叉点 ${bp.year}：A=${bp.decisionA}→${bp.pathA} / B=${bp.decisionB}→${bp.pathB}`,
+        `分叉点 ${bp.year}：A=${bp.decisionA}→${bp.pathA} / B=${bp.decisionB}→${bp.pathB}${insight}`,
       );
+    }
     if (r.l6.depthWindows && r.l6.depthWindows.length > 0) {
       lines.push('各线行运窗口（深度模式）：');
       for (const w of r.l6.depthWindows) lines.push(`- ${w.line}：${w.windows.join(' → ')}`);

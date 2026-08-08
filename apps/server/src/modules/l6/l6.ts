@@ -1,12 +1,14 @@
 /**
- * L6 量子多线（V5）
+ * L6 量子多线（V6）
  * 四条平行命运线对比 + 关键分叉点提醒。
  * 核心理念：未来不是一条被写死的轨道，而是由关键选择决定的开放树状结构；
  * 四条线均为同等可能，权重由行动决定。红线约定：禁止宿命论，禁止恐吓。
+ * V6：深度模式（quantum/ultimate）下结合用神五行与大运干支生克给出分叉点研判。
  */
 import type { BaziResult } from '../l2/bazi.js';
 import type { L4Output } from '../l4/l4.js';
 import type { L5Output } from '../l5/l5.js';
+import { runDeepAnalysis } from '../l2/deep.js';
 
 export interface ParallelLine {
   key: string;
@@ -25,6 +27,8 @@ export interface BranchPoint {
   pathA: string;
   decisionB: string;
   pathB: string;
+  /** 深度模式（quantum/ultimate）下：用神与大运生克研判（倾向性文化参考） */
+  insight?: string;
 }
 
 export interface L6Output {
@@ -47,6 +51,7 @@ export function runL6(
   const countOf = (name: string) => bazi.shishenStats.find((s) => s.name === name)?.count ?? 0;
   const socialScore = l4.dimensions.find((d) => d.key === 'social')?.renwei ?? 55;
   const decisionScore = l4.dimensions.find((d) => d.key === 'decision')?.renwei ?? 55;
+  const yongShen = runDeepAnalysis(bazi).yongShen.yong;
 
   // 四条线的契合度（从结构映射）
   const raw = {
@@ -98,6 +103,24 @@ export function runL6(
   const future = bazi.daYun.filter((d) => d.index > (bazi.currentDaYun?.index ?? 0));
   const top = [...lines].sort((a, b) => b.fit - a.fit);
   const branchDepth = depth === 'ultimate' ? future.length : depth === 'quantum' ? 5 : 3;
+
+  // 大运天干五行（取干支首字）
+  const GAN_WX: Record<string, string> = {
+    甲: '木', 乙: '木', 丙: '火', 丁: '火', 戊: '土',
+    己: '土', 庚: '金', 辛: '金', 壬: '水', 癸: '水',
+  };
+  // 用神与大运干支生克研判（倾向性）
+  const dayunInsight = (gan: string): string => {
+    const wx = GAN_WX[gan];
+    if (!wx || !yongShen) return '';
+    const SHENG: Record<string, string> = { 木: '火', 火: '土', 土: '金', 金: '水', 水: '木' };
+    const KE: Record<string, string> = { 木: '土', 土: '水', 水: '火', 火: '金', 金: '木' };
+    if (wx === yongShen) return `此运天干${gan}（${wx}）与用神同气，倾向性上更顺，可放心深耕（文化参考）。`;
+    if (SHENG[wx] === yongShen) return `此运天干${gan}（${wx}）生用神，倾向性上是补位之运，适合借势投入（文化参考）。`;
+    if (KE[wx] === yongShen) return `此运天干${gan}（${wx}）克用神，传统称为「逆气」，宜稳不宜冒进，多留调整余地（文化参考）。`;
+    return `此运天干${gan}（${wx}）与用神为泄耗关系，节奏上适合休整积累，不宜急于扩张（文化参考）。`;
+  };
+
   const branchPoints: BranchPoint[] = future.slice(0, branchDepth).map((dy) => ({
     age: dy.startAge,
     year: dy.startYear,
@@ -106,6 +129,7 @@ export function runL6(
     pathA: top[0]?.name ?? '稳进线 · 深耕者',
     decisionB: `围绕一个跨领域机会做一次「转型」式尝试`,
     pathB: top[1]?.name ?? '破局线 · 开创者',
+    ...(depth !== 'standard' ? { insight: dayunInsight(dy.ganzhi[0]) } : {}),
   }));
 
   // 深度模式附加：每条线的后续行运窗口（把大运转换年映射到各线契合策略）
