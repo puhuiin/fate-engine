@@ -336,8 +336,8 @@ export function resolveYongShen(bazi: BaziResult): YongShenResult {
   const isWinter = monthIndex === 11 || monthIndex === 0 || monthIndex === 1;
   const isSummer = monthIndex === 5 || monthIndex === 6 || monthIndex === 7;
 
-  let method = '';
-  let yong = '';
+  let method: string;
+  let yong: string;
   if (bazi.strength === '偏旺') {
     method = '扶抑（偏旺取克泄耗补缺）';
     const sorted = [...keXieHao].sort((a, b) => (wc[a] ?? 0) - (wc[b] ?? 0));
@@ -359,7 +359,7 @@ export function resolveYongShen(bazi: BaziResult): YongShenResult {
   const xi = SHENG_WO[yong] ?? '';
   const ji = yong ? [KE_WO[yong], WO_KE[yong]].filter(Boolean) : [];
 
-  let tiaoHou = '';
+  let tiaoHou: string;
   if (isWinter) {
     tiaoHou = '冬生需调候：火暖局（寒金需丙丁之火）';
   } else if (isSummer) {
