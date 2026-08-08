@@ -95,6 +95,11 @@ export const recordsQuerySchema = z.object({
   calcType: z.enum(['standard', 'quantum', 'ultimate']).optional(),
 });
 
+/** L1 城市检索：查询参数 q 仅允许字符串，自动 trim 并限长 20（与其余路由统一走 Zod 校验） */
+export const locationSearchSchema = z.object({
+  q: z.string().trim().max(20).optional().default(''),
+});
+
 /** 支付订单 */
 export const orderPaySchema = z.object({
   channel: z.enum(['mock', 'wechat', 'alipay']).default('mock'),

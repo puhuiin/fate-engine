@@ -16,6 +16,8 @@ import { planRoutes } from './routes/plans.js';
 import { kernelRoutes } from './routes/kernel.js';
 import { statsRoutes } from './routes/stats.js';
 import { fail, ok } from './lib/util.js';
+import { assertSchema } from './lib/http.js';
+import { locationSearchSchema } from './schema.js';
 import { authenticate } from './lib/auth.js';
 import { createRateLimitHook } from './lib/rateLimit.js';
 import { cachedOpenApiDoc } from './lib/openapi.js';
@@ -350,9 +352,7 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
 
   /** L1 城市检索（前端录入页自动补全） */
   app.get('/api/v1/locations/search', async (req) => {
-    const q = String((req.query as { q?: string }).q ?? '')
-      .trim()
-      .slice(0, 20);
+    const { q } = assertSchema(locationSearchSchema, req.query ?? {});
     return ok(searchCities(q));
   });
 
