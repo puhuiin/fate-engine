@@ -1,12 +1,15 @@
 /**
  * L2 术数算力池（V2）
- * 多流派并行原始测算：八字命理、纳音五行论命、神煞格局、五运六气、十神六亲，
+ * 多流派并行原始测算：八字命理、纳音五行论命、神煞格局、五运六气、十神六亲、
+ * 调候用神（穷通宝鉴）、病药论（神峰通考），
  * 输出原始数据 + 流派口径说明；冲突项交由 L7 元规则内核归一。
  */
 import { buildBazi, type BaziResult } from './bazi.js';
 import { buildShenSha } from './shensha.js';
 import { buildWuYunLiuQi } from './wuyunliuqi.js';
 import { buildLiuQin } from './liuqin.js';
+import { buildTiaoHou } from './tiaohou.js';
+import { buildBingYao } from './bingyao.js';
 
 export interface L2School {
   school: string;
@@ -72,6 +75,8 @@ export function runL2(
   const shensha = buildShenSha(bazi);
   const wuyun = buildWuYunLiuQi(bazi.pillars.year.gan, bazi.pillars.year.zhi);
   const liuqin = buildLiuQin(bazi);
+  const tiaohou = buildTiaoHou(bazi);
+  const bingyao = buildBingYao(bazi);
 
   const schools: L2School[] = [
     {
@@ -121,6 +126,18 @@ export function runL2(
       version: 'V1',
       note: '以十神分布定位官印财食比六亲星强弱，观关系结构倾向。',
       data: liuqin,
+    },
+    {
+      school: '调候用神',
+      version: 'V1',
+      note: '以日干×出生月令查穷通宝鉴调候用神（寒暖燥湿处方），并核对命局是否到位。',
+      data: tiaohou,
+    },
+    {
+      school: '病药论',
+      version: 'V1',
+      note: '以五行失衡为病、制化补益为药（神峰通考），与旺衰喜忌相互印证。',
+      data: bingyao,
     },
   ];
 

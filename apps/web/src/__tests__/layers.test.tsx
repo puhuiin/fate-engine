@@ -23,10 +23,15 @@ const baseBazi = {
   mingGong: '乙未',
   shenGong: '庚戌',
   taiXi: '丙子',
-  daYun: [
-    { index: 0, ganzhi: '壬子', startAge: 3, endAge: 12, startYear: 2005, endYear: 2014 },
-  ],
-  currentDaYun: { index: 2, ganzhi: '甲寅', startAge: 23, endAge: 32, startYear: 2025, endYear: 2034 },
+  daYun: [{ index: 0, ganzhi: '壬子', startAge: 3, endAge: 12, startYear: 2005, endYear: 2014 }],
+  currentDaYun: {
+    index: 2,
+    ganzhi: '甲寅',
+    startAge: 23,
+    endAge: 32,
+    startYear: 2025,
+    endYear: 2034,
+  },
 };
 
 const pillar = (position: string) => ({
@@ -72,7 +77,12 @@ const l2: L2Result = {
       school: '纳音五行论命',
       version: 'V1',
       note: '以纳音取象。',
-      data: { yearNaYin: '杨柳木', dayNaYin: '壁上土', dayNaYinWuXing: '土', profile: '稳健务实。' },
+      data: {
+        yearNaYin: '杨柳木',
+        dayNaYin: '壁上土',
+        dayNaYinWuXing: '土',
+        profile: '稳健务实。',
+      },
     },
     {
       school: '神煞格局',
@@ -123,14 +133,78 @@ const l2: L2Result = {
       note: '以十神分布定六亲。',
       data: {
         relatives: [
-          { name: '官杀（事业/权威）', category: '正官/七杀', count: 2, level: '中', note: '力量适中。' },
-          { name: '印星（庇护/学问）', category: '正印/偏印', count: 4, level: '强', note: '力量突出。' },
-          { name: '财星（资源/经营）', category: '正财/偏财', count: 1, level: '弱', note: '力量偏弱。' },
-          { name: '食伤（才华/表达）', category: '食神/伤官', count: 3, level: '强', note: '力量突出。' },
-          { name: '比劫（同伴/竞争）', category: '比肩/劫财', count: 3, level: '强', note: '力量突出。' },
+          {
+            name: '官杀（事业/权威）',
+            category: '正官/七杀',
+            count: 2,
+            level: '中',
+            note: '力量适中。',
+          },
+          {
+            name: '印星（庇护/学问）',
+            category: '正印/偏印',
+            count: 4,
+            level: '强',
+            note: '力量突出。',
+          },
+          {
+            name: '财星（资源/经营）',
+            category: '正财/偏财',
+            count: 1,
+            level: '弱',
+            note: '力量偏弱。',
+          },
+          {
+            name: '食伤（才华/表达）',
+            category: '食神/伤官',
+            count: 3,
+            level: '强',
+            note: '力量突出。',
+          },
+          {
+            name: '比劫（同伴/竞争）',
+            category: '比肩/劫财',
+            count: 3,
+            level: '强',
+            note: '力量突出。',
+          },
         ],
         summary: '印星、食伤、比劫力量突出。',
         note: '十神六亲为关系结构参考。',
+      },
+    },
+    {
+      school: '调候用神',
+      version: 'V1',
+      note: '以日干×月令查调候用神。',
+      data: {
+        day: '辛',
+        month: '亥',
+        season: '冬',
+        use: ['壬', '丙'],
+        usePresent: ['壬'],
+        useMissing: ['丙'],
+        balanced: false,
+        principle: '寒冬水冷木枯，急需火（丙丁）暖局。',
+        summary: '辛日主生于亥月（冬），穷通宝鉴取调候用神「壬、丙」。',
+        note: '调候用神关注「气候环境」。',
+      },
+    },
+    {
+      school: '病药论',
+      version: 'V1',
+      note: '以五行失衡为病、制化补益为药。',
+      data: {
+        bings: [
+          { wx: '土', count: 3, type: '偏旺', desc: '土偏旺壅滞为病。' },
+          { wx: '木', count: 0, type: '不及', desc: '木缺失为病。' },
+        ],
+        yaos: [
+          { wx: '木', role: '克', desc: '以木克土制约过旺之气。' },
+          { wx: '水', role: '生', desc: '以水生木补足所缺之源。' },
+        ],
+        summary: '本命病在土偏旺与缺木，药取木、水。',
+        note: '病药论为分析视角之一。',
       },
     },
   ],
@@ -140,14 +214,16 @@ const l2: L2Result = {
   bazi: baseBazi,
 };
 
-describe('Layer2 五流派渲染', () => {
-  it('渲染 5 个流派区块', () => {
+describe('Layer2 七流派渲染', () => {
+  it('渲染 7 个流派区块', () => {
     render(<Layer2 l2={l2} />);
     expect(screen.getByText('八字命理（V2）')).toBeTruthy();
     expect(screen.getByText('纳音五行论命（V1）')).toBeTruthy();
     expect(screen.getByText('神煞格局（V1）')).toBeTruthy();
     expect(screen.getByText('五运六气（V1）')).toBeTruthy();
     expect(screen.getByText('十神六亲（V1）')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 3, name: /调候用神/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 3, name: /病药论/ })).toBeTruthy();
   });
 
   it('渲染神煞命中明细', () => {
@@ -169,6 +245,21 @@ describe('Layer2 五流派渲染', () => {
     expect(screen.getByText('印星（庇护/学问）')).toBeTruthy();
     expect(screen.getByText(/强（4）/)).toBeTruthy();
     expect(screen.getByText(/印星、食伤、比劫力量突出/)).toBeTruthy();
+  });
+
+  it('渲染调候用神状态与处方', () => {
+    render(<Layer2 l2={l2} />);
+    expect(screen.getByText('壬、丙')).toBeTruthy();
+    expect(screen.getByText('辛日主 × 亥月（冬季）')).toBeTruthy();
+    expect(screen.getByText('有所欠缺')).toBeTruthy();
+  });
+
+  it('渲染病药论病与药', () => {
+    render(<Layer2 l2={l2} />);
+    expect(screen.getByText('土')).toBeTruthy();
+    expect(screen.getByText('过旺')).toBeTruthy();
+    expect(screen.getByText('克')).toBeTruthy();
+    expect(screen.getByText(/本命病在土偏旺与缺木，药取木、水/)).toBeTruthy();
   });
 
   it('渲染八字身宫/胎息', () => {

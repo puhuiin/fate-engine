@@ -188,7 +188,37 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
 
   const liuqinData = l2.schools.find((s) => s.school === '十神六亲')?.data as
     | {
-        relatives: Array<{ name: string; category: string; count: number; level: string; note: string }>;
+        relatives: Array<{
+          name: string;
+          category: string;
+          count: number;
+          level: string;
+          note: string;
+        }>;
+        summary: string;
+        note: string;
+      }
+    | undefined;
+
+  const tiaohouData = l2.schools.find((s) => s.school === '调候用神')?.data as
+    | {
+        day: string;
+        month: string;
+        season: string;
+        use: string[];
+        usePresent: string[];
+        useMissing: string[];
+        balanced: boolean;
+        principle: string;
+        summary: string;
+        note: string;
+      }
+    | undefined;
+
+  const bingyaoData = l2.schools.find((s) => s.school === '病药论')?.data as
+    | {
+        bings: Array<{ wx: string; count: number; type: string; desc: string }>;
+        yaos: Array<{ wx: string; role: string; desc: string }>;
         summary: string;
         note: string;
       }
@@ -496,6 +526,111 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
           </>
         ) : (
           <p className="dim">暂无十神六亲数据。</p>
+        )}
+      </section>
+
+      <section>
+        <h3>
+          调候用神（
+          <TermPlain term="穷通宝鉴" plain="子平派四大分支之一的调候派典籍" />
+          V1）
+        </h3>
+        {tiaohouData ? (
+          <>
+            <table className="kv">
+              <tbody>
+                <tr>
+                  <td>
+                    <TermPlain term="调候用神" plain="按出生月份寒暖定制的五行处方" />
+                  </td>
+                  <td className="strong">{tiaohouData.use.join('、') || '—'}</td>
+                </tr>
+                <tr>
+                  <td>坐标</td>
+                  <td>
+                    {tiaohouData.day}日主 × {tiaohouData.month}月（{tiaohouData.season}季）
+                  </td>
+                </tr>
+                <tr>
+                  <td>命局已现</td>
+                  <td>{tiaohouData.usePresent.join('、') || '无'}</td>
+                </tr>
+                <tr>
+                  <td>命局未现</td>
+                  <td>{tiaohouData.useMissing.join('、') || '无'}</td>
+                </tr>
+                <tr>
+                  <td>调候是否到位</td>
+                  <td>
+                    {tiaohouData.balanced ? (
+                      <span className="strong">到位（气候调和）</span>
+                    ) : (
+                      <span className="dim">有所欠缺</span>
+                    )}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="dim">{tiaohouData.principle}</p>
+            <p className="summary">{tiaohouData.summary}</p>
+            <p className="hint">{tiaohouData.note}</p>
+          </>
+        ) : (
+          <p className="dim">暂无调候用神数据。</p>
+        )}
+      </section>
+
+      <section>
+        <h3>
+          病药论（
+          <TermPlain term="神峰通考" plain="明代「寻病定药」的命理方法" />
+          V1）
+        </h3>
+        {bingyaoData ? (
+          <>
+            <table className="kv">
+              <thead>
+                <tr>
+                  <th>病（失衡）</th>
+                  <th>处数</th>
+                  <th>状态</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bingyaoData.bings.map((b) => (
+                  <tr key={b.wx}>
+                    <td className="strong">{b.wx}</td>
+                    <td>{b.count}</td>
+                    <td>{b.type === '太过' || b.type === '偏旺' ? '过旺' : '不及'}</td>
+                    <td>{b.desc}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <table className="kv">
+              <thead>
+                <tr>
+                  <th>药（补益）</th>
+                  <th>作用</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bingyaoData.yaos.map((y) => (
+                  <tr key={y.wx + y.role}>
+                    <td className="strong">{y.wx}</td>
+                    <td>{y.role}</td>
+                    <td>{y.desc}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="summary">{bingyaoData.summary}</p>
+            <p className="hint">{bingyaoData.note}</p>
+          </>
+        ) : (
+          <p className="dim">暂无病药论数据。</p>
         )}
       </section>
 

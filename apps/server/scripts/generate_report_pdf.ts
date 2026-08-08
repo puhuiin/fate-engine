@@ -710,6 +710,14 @@ function renderL2(doc: PDFKit.PDFDocument, d: L2Output): void {
       renderLiuQinPdf(doc, s);
       continue;
     }
+    if (s.school === '调候用神') {
+      renderTiaoHouPdf(doc, s);
+      continue;
+    }
+    if (s.school === '病药论') {
+      renderBingYaoPdf(doc, s);
+      continue;
+    }
     section(doc, `${s.school}（${s.version}）`);
     if (s.note) para(doc, s.note, 14);
     if (s.data) {
@@ -742,7 +750,8 @@ function renderShenShaPdf(doc: PDFKit.PDFDocument, s: { note: string; data: obje
   for (const g of data.groups ?? []) {
     section(doc, g.group);
     if (g.stars.length > 0) {
-      for (const st of g.stars) listItem(doc, null, `${st.name}（${st.pillar}${st.at}）：${st.note}`);
+      for (const st of g.stars)
+        listItem(doc, null, `${st.name}（${st.pillar}${st.at}）：${st.note}`);
       para(doc, g.interpretation, 14);
     } else {
       para(doc, '该组未见显著命中。', 14);
@@ -750,10 +759,7 @@ function renderShenShaPdf(doc: PDFKit.PDFDocument, s: { note: string; data: obje
   }
 }
 
-function renderWuYunLiuQiPdf(
-  doc: PDFKit.PDFDocument,
-  s: { note: string; data: object },
-): void {
+function renderWuYunLiuQiPdf(doc: PDFKit.PDFDocument, s: { note: string; data: object }): void {
   section(doc, '五运六气（V1）');
   const data = s.data as {
     zhongYun?: { name: string; phase: string; qi: string; note: string };
@@ -793,10 +799,79 @@ function renderWuYunLiuQiPdf(
   if (data.note) noteBlock(doc, data.note, '口径说明');
 }
 
+function renderTiaoHouPdf(doc: PDFKit.PDFDocument, s: { note: string; data: object }): void {
+  section(doc, '调候用神（V1 · 穷通宝鉴）');
+  if (s.note) para(doc, s.note, 14);
+  const d = s.data as {
+    day: string;
+    month: string;
+    season: string;
+    use: string[];
+    usePresent: string[];
+    useMissing: string[];
+    balanced: boolean;
+    principle: string;
+    summary: string;
+    note: string;
+  };
+  kv(doc, '坐标', `${d.day}日主 × ${d.month}月（${d.season}季）`);
+  kv(doc, '调候用神', d.use.join('、') || '—');
+  kv(doc, '命局已现', d.usePresent.join('、') || '无');
+  kv(doc, '命局未现', d.useMissing.join('、') || '无');
+  kv(doc, '调候是否到位', d.balanced ? '到位（气候调和）' : '有所欠缺');
+  if (d.principle) para(doc, d.principle, 14);
+  noteBlock(doc, d.summary, '调候结论');
+  noteBlock(doc, d.note, '口径说明');
+}
+
+function renderBingYaoPdf(doc: PDFKit.PDFDocument, s: { note: string; data: object }): void {
+  section(doc, '病药论（V1 · 神峰通考）');
+  if (s.note) para(doc, s.note, 14);
+  const d = s.data as {
+    bings: Array<{ wx: string; count: number; type: string; desc: string }>;
+    yaos: Array<{ wx: string; role: string; desc: string }>;
+    summary: string;
+    note: string;
+  };
+  if (d.bings.length > 0) {
+    section(doc, '病（五行失衡）');
+    table(
+      doc,
+      ['五行', '处数', '状态', '说明'],
+      d.bings.map((b) => [
+        b.wx,
+        String(b.count),
+        b.type === '太过' || b.type === '偏旺' ? '过旺' : '不及',
+        b.desc,
+      ]),
+      [0.1, 0.09, 0.12, 0.69],
+    );
+  } else {
+    para(doc, '五行分布较为均衡，无明显病位。', 14);
+  }
+  if (d.yaos.length > 0) {
+    section(doc, '药（制化补益）');
+    table(
+      doc,
+      ['五行', '作用', '说明'],
+      d.yaos.map((y) => [y.wx, y.role, y.desc]),
+      [0.1, 0.12, 0.78],
+    );
+  }
+  noteBlock(doc, d.summary, '病药结论');
+  noteBlock(doc, d.note, '口径说明');
+}
+
 function renderLiuQinPdf(doc: PDFKit.PDFDocument, s: { note: string; data: object }): void {
   section(doc, '十神六亲（V1）');
   const data = s.data as {
-    relatives?: Array<{ name: string; category: string; count: number; level: string; note: string }>;
+    relatives?: Array<{
+      name: string;
+      category: string;
+      count: number;
+      level: string;
+      note: string;
+    }>;
     summary?: string;
     note?: string;
   };
@@ -1055,7 +1130,7 @@ function main(): void {
   // 输出到已 gitignore 的 data/ 目录，避免 PDF 生成产物反复进出版本库
   const outPath = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    '../../data/fate-report-test.pdf',
+    '../data/fate-report-test.pdf',
   );
   doc.pipe(fs.createWriteStream(outPath));
 

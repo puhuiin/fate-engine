@@ -12,7 +12,7 @@
 | 层 | 名称 | 说明 |
 |----|------|------|
 | L1 | 时空校正 | 真太阳时换算（经度修正 + 均时差）、跨日/夏令时边界处理、数据可信度评级 |
-| L2 | 术数五流派 | 八字（含流派统一口径：23 点换日、分秒级起运）、纳音五行、神煞格局、五运六气、十神六亲并行计算并输出流派标注 |
+| L2 | 术数七流派 | 八字（含流派统一口径：23 点换日、分秒级起运）、纳音五行、神煞格局、五运六气、十神六亲、调候用神、病药论并行计算并输出流派标注 |
 | L3 | 科学祛魅 | 概率参照系、样本偏差说明，弱化确定性宣称 |
 | L4 | 综合研判 | 30% 先天 + 20% 流年 + 50% 人为权重合成综合指数 |
 | L5 | 因果溯源 | 识别"求认可与自我证明"类核心卡点（含缺五行模式） |
@@ -46,7 +46,7 @@
 |----|------|
 | 后端 | Node.js + TypeScript + Fastify + better-sqlite3 + lunar-javascript + zod |
 | 前端 | React 18 + Vite + react-router-dom |
-| 校验 | 5 组确定性回归脚本（10 + 24 + 47 + 172 + 11 = 264 断言，verify_all 为聚合入口，各脚本运行均输出断言总数可自动核对）；前端 17 文件 131 用例（含 React 组件/hook 测试） |
+| 校验 | 5 组确定性回归脚本（10 + 29 + 47 + 172 + 11 = 269 断言，verify_all 为聚合入口，各脚本运行均输出断言总数可自动核对）；前端 18 文件 140 用例（含 React 组件/hook 测试） |
 
 ---
 
@@ -93,12 +93,12 @@ npm run start        # 以 node dist 启动后端
 ## 验证与回归
 
 ```bash
-# 全量回归（verify_all 44 + 5 组 264 = 308 断言）
+# 全量回归（verify_all 44 + 5 组 269 = 313 断言）
 npm run verify -w @fate/server
 
 # 分块验证
 npm run verify:l1 -w @fate/server   # 真太阳时/跨日/夏令时/排盘子时边界（10 用例）
-npm run verify:l2 -w @fate/server   # 五流派算力池（八字/纳音/神煞/五运六气/十神六亲）+ 大运顺逆 + 历法边界（24 断言）
+npm run verify:l2 -w @fate/server   # 七流派算力池（八字/纳音/神煞/五运六气/十神六亲/调候用神/病药论）+ 大运顺逆 + 历法边界（29 断言）
 npm run verify:l3 -w @fate/server   # L5–L9 确定性输出（47 断言，含深度模式差异）
 npm run verify:api -w @fate/server  # 接口层（172 断言，内存 SQLite + inject，含取消订单/订单历史隔离/中文错误消息/短信每日上限/城市检索边界/统计看板一致性/过期清理/模式筛选/静态缓存与 304/CORS preflight/OpenAPI/生产密钥启动守卫）
 npm run verify:migrate -w @fate/server  # 迁移机制（11 断言：新库全量/幂等重跑/补列 PRAGMA 全覆盖/新列默认值可读写/旧库补应用）
@@ -179,7 +179,7 @@ npm run test -w @fate/web
 fate-engine/
 ├── apps/
 │   ├── server/
-│   │   ├── scripts/          # verify_all/l1/l2/l3/api 回归脚本
+│   │   ├── scripts/          # verify_all/l1/l2/l3/api/migrate 回归脚本 + generate_report_pdf 报告生成
 │   │   └── src/
 │   │       ├── index.ts      # 入口（生产 FATE_SECRET 强校验；启动/停机挂载订单过期与数据清理任务）
 │   │       ├── app.ts        # Fastify 组装 + 统一错误处理 + 健康检查
@@ -189,7 +189,7 @@ fate-engine/
 │   │       ├── jobs/         # expireOrders.ts 订单过期清理 + dataCleanup.ts 数据生命周期治理
 │   │       ├── modules/
 │   │       │   ├── l1/       # 时空校正（dst 夏令时 / location / time / rating）
-│   │       │   ├── l2/       # 术数五流派（八字/纳音/神煞/五运六气/六亲）
+│   │       │   ├── l2/       # 术数七流派（八字/纳音/神煞/五运六气/六亲/调候用神/病药论）
 │   │       │   ├── l3/ … l9/ # 后续各层，l6 含 risk 输出映射
 │   │       ├── db/
 │   │       │   ├── client.ts    # better-sqlite3 连接与建表

@@ -40,7 +40,7 @@ const l3 = runL3(l2.bazi);
 const l4 = runL4(l2.bazi);
 
 const checks: Array<[string, boolean]> = [
-  ['L2 五流派并行', l2.schools.length === 5],
+  ['L2 七流派并行', l2.schools.length === 7],
   ['L2 日主辛/金', l2.bazi.dayMaster.gan === '辛' && l2.bazi.dayMaster.wuxing === '金'],
   [
     'L2 当前大运甲寅2025-2034',
@@ -98,6 +98,57 @@ const checks: Array<[string, boolean]> = [
         relatives?: unknown[];
       };
       return q?.relatives?.length === 5;
+    })(),
+  ],
+  [
+    'L2 调候用神 亥月辛金→壬丙',
+    (() => {
+      const t = l2.schools.find((s) => s.school === '调候用神')?.data as {
+        use?: string[];
+        month?: string;
+      };
+      return t?.month === '亥' && t.use?.includes('壬') && t.use?.includes('丙');
+    })(),
+  ],
+  [
+    'L2 调候到位判定 壬现丙缺→未到位',
+    (() => {
+      const t = l2.schools.find((s) => s.school === '调候用神')?.data as {
+        usePresent?: string[];
+        useMissing?: string[];
+        balanced?: boolean;
+      };
+      return (
+        t?.usePresent?.includes('壬') && t?.useMissing?.includes('丙') && t?.balanced === false
+      );
+    })(),
+  ],
+  [
+    'L2 病药论 病在土偏旺/木不及',
+    (() => {
+      const b = l2.schools.find((s) => s.school === '病药论')?.data as {
+        bings?: Array<{ wx: string; type: string }>;
+      };
+      const types = (b?.bings ?? []).map((x) => `${x.wx}:${x.type}`);
+      return types.includes('土:偏旺') && types.includes('木:不及');
+    })(),
+  ],
+  [
+    'L2 病药论 药取木克/金泄/水生',
+    (() => {
+      const b = l2.schools.find((s) => s.school === '病药论')?.data as {
+        yaos?: Array<{ wx: string; role: string }>;
+      };
+      const roles = (b?.yaos ?? []).map((y) => `${y.wx}:${y.role}`);
+      return roles.includes('木:克') && roles.includes('金:泄') && roles.includes('水:生');
+    })(),
+  ],
+  [
+    'L2 调候/病药/旺衰喜忌方向互证',
+    (() => {
+      const t = l2.schools.find((s) => s.school === '调候用神')?.data as { use?: string[] };
+      const b = l2.schools.find((s) => s.school === '病药论')?.data as { yaos?: unknown[] };
+      return (t?.use?.length ?? 0) > 0 && (b?.yaos?.length ?? 0) > 0;
     })(),
   ],
   ['L3 五维人格', l3.personality.length === 5],

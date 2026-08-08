@@ -138,7 +138,7 @@ function rejectsInvalid(): boolean {
 
 const checks: Array<[string, boolean]> = [
   ['L1 真太阳时校正', l1.timeCorrection.trueSolarHours > 0],
-  ['L2 五流派排盘', l2.schools.length === 5],
+  ['L2 七流派排盘', l2.schools.length === 7],
   ['L3 祛魅声明', l3.disenchantNote.includes('文化隐喻')],
   ['L4 权重30/20/50', l4.weightModel.renwei === 0.5],
   ['L5 主卡点非空', l5.mainKnot.length > 0],
