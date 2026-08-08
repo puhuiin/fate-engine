@@ -1,4 +1,4 @@
-import type { Db } from '../client.js';
+import { prepareStmt, type Db } from '../client.js';
 
 export interface PlanInput {
   level: number;
@@ -11,7 +11,7 @@ export interface PlanInput {
 export function createPlanRepo(db: Db) {
   return {
     insertBatch(recordId: number, items: PlanInput[]): void {
-      const stmt = db.prepare(
+      const stmt = prepareStmt(db, 
         'INSERT INTO luck_plan (record_id, level, title, content, exec_cycle) VALUES (?, ?, ?, ?, ?)',
       );
       for (const it of items) {
@@ -34,20 +34,20 @@ export function createPlanRepo(db: Db) {
         (Record<string, unknown> & { id: number; paid_status: number }) | undefined;
     },
     updateStatus(id: number, status: string): void {
-      db.prepare(
+      prepareStmt(db, 
         `UPDATE luck_plan SET status = ?,
            finished_at = CASE WHEN ? = 'done' THEN datetime('now') ELSE NULL END
          WHERE id = ?`,
       ).run(status, status, id);
     },
     appendNote(id: number, note: string): void {
-      db.prepare('UPDATE luck_plan SET content = content || char(10) || ? WHERE id = ?').run(
+      prepareStmt(db, 'UPDATE luck_plan SET content = content || char(10) || ? WHERE id = ?').run(
         note,
         id,
       );
     },
     findById<T = Record<string, unknown>>(id: number) {
-      return db.prepare('SELECT * FROM luck_plan WHERE id = ?').get(id) as T | undefined;
+      return prepareStmt(db, 'SELECT * FROM luck_plan WHERE id = ?').get(id) as T | undefined;
     },
   };
 }

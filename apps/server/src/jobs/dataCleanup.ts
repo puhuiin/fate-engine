@@ -1,5 +1,6 @@
 import type { Repos } from '../db/repo/index.js';
 import { config } from '../config.js';
+import { prepareStmt } from '../db/client.js';
 
 export interface DataCleanupStats {
   /** 引用缺失（档案/用户已不存在）的孤儿测算记录 */
@@ -32,10 +33,10 @@ export function runDataCleanup(repos: Repos): DataCleanupStats {
   if (orphanIds.length > 0) {
     const tx = repos.db.transaction(() => {
       for (const { id } of orphanIds) {
-        repos.db.prepare('DELETE FROM luck_plan WHERE record_id = ?').run(id);
-        repos.db.prepare('DELETE FROM risk_item WHERE record_id = ?').run(id);
-        repos.db.prepare('DELETE FROM order_pay WHERE record_id = ?').run(id);
-        repos.db.prepare('DELETE FROM calculate_record WHERE id = ?').run(id);
+        prepareStmt(repos.db, 'DELETE FROM luck_plan WHERE record_id = ?').run(id);
+        prepareStmt(repos.db, 'DELETE FROM risk_item WHERE record_id = ?').run(id);
+        prepareStmt(repos.db, 'DELETE FROM order_pay WHERE record_id = ?').run(id);
+        prepareStmt(repos.db, 'DELETE FROM calculate_record WHERE id = ?').run(id);
       }
     });
     tx();
@@ -57,14 +58,14 @@ export function runDataCleanup(repos: Repos): DataCleanupStats {
       .prepare('SELECT id FROM calculate_record WHERE user_id = ?')
       .all(userId) as Array<{ id: number }>;
     for (const { id } of records) {
-      repos.db.prepare('DELETE FROM luck_plan WHERE record_id = ?').run(id);
-      repos.db.prepare('DELETE FROM risk_item WHERE record_id = ?').run(id);
-      repos.db.prepare('DELETE FROM order_pay WHERE record_id = ?').run(id);
-      repos.db.prepare('DELETE FROM calculate_record WHERE id = ?').run(id);
+      prepareStmt(repos.db, 'DELETE FROM luck_plan WHERE record_id = ?').run(id);
+      prepareStmt(repos.db, 'DELETE FROM risk_item WHERE record_id = ?').run(id);
+      prepareStmt(repos.db, 'DELETE FROM order_pay WHERE record_id = ?').run(id);
+      prepareStmt(repos.db, 'DELETE FROM calculate_record WHERE id = ?').run(id);
     }
-    repos.db.prepare('DELETE FROM order_pay WHERE user_id = ?').run(userId);
-    repos.db.prepare('DELETE FROM user_birth_archive WHERE user_id = ?').run(userId);
-    repos.db.prepare('DELETE FROM sys_user WHERE id = ?').run(userId);
+    prepareStmt(repos.db, 'DELETE FROM order_pay WHERE user_id = ?').run(userId);
+    prepareStmt(repos.db, 'DELETE FROM user_birth_archive WHERE user_id = ?').run(userId);
+    prepareStmt(repos.db, 'DELETE FROM sys_user WHERE id = ?').run(userId);
   });
   for (const { id } of staleGuestIds) {
     deleteUserCascade(id);

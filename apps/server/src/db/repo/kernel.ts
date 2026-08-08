@@ -1,4 +1,4 @@
-import type { Db } from '../client.js';
+import { prepareStmt, type Db } from '../client.js';
 
 export interface KernelLogInput {
   version: string;
@@ -20,10 +20,10 @@ export function createKernelRepo(db: Db) {
       return Number(info.lastInsertRowid);
     },
     findById<T = Record<string, unknown>>(id: number) {
-      return db.prepare('SELECT * FROM kernel_log WHERE id = ?').get(id) as T | undefined;
+      return prepareStmt(db, 'SELECT * FROM kernel_log WHERE id = ?').get(id) as T | undefined;
     },
     listAll(limit = 100) {
-      return db.prepare('SELECT * FROM kernel_log ORDER BY id DESC LIMIT ?').all(limit) as Record<
+      return prepareStmt(db, 'SELECT * FROM kernel_log ORDER BY id DESC LIMIT ?').all(limit) as Record<
         string,
         unknown
       >[];

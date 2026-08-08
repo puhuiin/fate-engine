@@ -1,4 +1,4 @@
-import type { Db } from '../client.js';
+import { prepareStmt, type Db } from '../client.js';
 
 /** 订单数据访问：order_pay 表 */
 export function createOrderRepo(db: Db) {
@@ -19,7 +19,7 @@ export function createOrderRepo(db: Db) {
     },
     /** 将超时未支付的订单置为 expired（防僵尸订单堆积） */
     expirePendingByRecord(recordId: number, userId: number, ttlMs: number): void {
-      db.prepare(
+      prepareStmt(db, 
         `UPDATE order_pay SET entitlement_status = 'expired'
          WHERE record_id = ? AND user_id = ? AND entitlement_status = 'pending'
            AND created_at <= ?`,
@@ -44,10 +44,10 @@ export function createOrderRepo(db: Db) {
       return Number(info.lastInsertRowid);
     },
     findById<T = Record<string, unknown>>(id: number) {
-      return db.prepare('SELECT * FROM order_pay WHERE id = ?').get(id) as T | undefined;
+      return prepareStmt(db, 'SELECT * FROM order_pay WHERE id = ?').get(id) as T | undefined;
     },
     findByIdAndUser<T = Record<string, unknown>>(id: number, userId: number) {
-      return db.prepare('SELECT * FROM order_pay WHERE id = ? AND user_id = ?').get(id, userId) as
+      return prepareStmt(db, 'SELECT * FROM order_pay WHERE id = ? AND user_id = ?').get(id, userId) as
         T | undefined;
     },
     latestByRecord(recordId: number, userId: number) {
@@ -72,17 +72,17 @@ export function createOrderRepo(db: Db) {
         .all(userId, limit) as Record<string, unknown>[];
     },
     markGranted(id: number, channel: string): void {
-      db.prepare(
+      prepareStmt(db, 
         `UPDATE order_pay SET entitlement_status = 'granted', pay_channel = ? WHERE id = ?`,
       ).run(channel, id);
     },
     markGrantedById(id: number): void {
-      db.prepare(
+      prepareStmt(db, 
         `UPDATE order_pay SET entitlement_status = 'granted' WHERE id = ? AND entitlement_status = 'pending'`,
       ).run(id);
     },
     markExpired(id: number): void {
-      db.prepare(
+      prepareStmt(db, 
         `UPDATE order_pay SET entitlement_status = 'expired'
          WHERE id = ? AND entitlement_status = 'pending'`,
       ).run(id);

@@ -1,4 +1,4 @@
-import type { Db } from '../client.js';
+import { prepareStmt, type Db } from '../client.js';
 
 /** 测算记录数据访问：calculate_record 表 */
 export function createRecordRepo(db: Db) {
@@ -45,19 +45,19 @@ export function createRecordRepo(db: Db) {
       const rows = db
         .prepare(`SELECT ${cols} ${base} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`)
         .all(...params, pageSize, (page - 1) * pageSize) as Record<string, unknown>[];
-      const total = db.prepare(`SELECT COUNT(*) AS n ${base}`).get(...params) as { n: number };
+      const total = prepareStmt(db, `SELECT COUNT(*) AS n ${base}`).get(...params) as { n: number };
       return { rows, total: Number(total.n) };
     },
     markPaid(recordId: number): void {
-      db.prepare('UPDATE calculate_record SET paid_status = 1 WHERE id = ?').run(recordId);
+      prepareStmt(db, 'UPDATE calculate_record SET paid_status = 1 WHERE id = ?').run(recordId);
     },
     /** 删除记录并级联清理改运方案/风险/订单（单一事务） */
     deleteCascade(recordId: number): void {
       const tx = db.transaction(() => {
-        db.prepare('DELETE FROM luck_plan WHERE record_id = ?').run(recordId);
-        db.prepare('DELETE FROM risk_item WHERE record_id = ?').run(recordId);
-        db.prepare('DELETE FROM order_pay WHERE record_id = ?').run(recordId);
-        db.prepare('DELETE FROM calculate_record WHERE id = ?').run(recordId);
+        prepareStmt(db, 'DELETE FROM luck_plan WHERE record_id = ?').run(recordId);
+        prepareStmt(db, 'DELETE FROM risk_item WHERE record_id = ?').run(recordId);
+        prepareStmt(db, 'DELETE FROM order_pay WHERE record_id = ?').run(recordId);
+        prepareStmt(db, 'DELETE FROM calculate_record WHERE id = ?').run(recordId);
       });
       tx();
     },

@@ -1,10 +1,33 @@
 import Database from 'better-sqlite3';
+import type { Statement } from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
 import { runMigrations } from './migrations.js';
 
 export const DB_PATH = config.dbPath;
+
+/**
+ * 进程内预编译语句缓存：better-sqlite3 每次 `prepare` 都会重新编译 SQL，
+ * 热点数据访问（测算写入 / 历史分页 / 支付 / 周期清理）重复 prepare 有可观测开销。
+ * 按 db 实例分桶（WeakMap，db 关闭后连同语句一并被 GC），相同 SQL 复用已编译语句，
+ * 降低编译耗时与 GC 压力，且不改变任何调用方语义（语句可安全重复绑定不同参数）。
+ */
+const stmtCache = new WeakMap<Database.Database, Map<string, Statement>>();
+
+export function prepareStmt(db: Database.Database, sql: string): Statement {
+  let byDb = stmtCache.get(db);
+  if (!byDb) {
+    byDb = new Map();
+    stmtCache.set(db, byDb);
+  }
+  let stmt = byDb.get(sql);
+  if (!stmt) {
+    stmt = db.prepare(sql);
+    byDb.set(sql, stmt);
+  }
+  return stmt;
+}
 
 /** PRD「6. 数据库核心表结构」7 张表 DDL */
 export const DDL = `

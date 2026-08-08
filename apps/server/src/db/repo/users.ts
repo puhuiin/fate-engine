@@ -1,4 +1,4 @@
-import type { Db } from '../client.js';
+import { prepareStmt, type Db } from '../client.js';
 
 export const USER_PUBLIC_COLS =
   'id, phone_masked, nickname, register_channel, member_level, member_expire_at, created_at';
@@ -15,7 +15,7 @@ export function createUserRepo(db: Db) {
       return Number(info.lastInsertRowid);
     },
     findByPhone<T = UserRow>(phone: string, cols = USER_PUBLIC_COLS) {
-      return db.prepare(`SELECT ${cols} FROM sys_user WHERE phone = ?`).get(phone) as T | undefined;
+      return prepareStmt(db, `SELECT ${cols} FROM sys_user WHERE phone = ?`).get(phone) as T | undefined;
     },
     insertPhoneUser(phone: string, phoneMasked: string, nickname: string) {
       const info = db
@@ -26,13 +26,13 @@ export function createUserRepo(db: Db) {
       return Number(info.lastInsertRowid);
     },
     findById<T = UserRow>(id: number, cols = USER_PUBLIC_COLS) {
-      return db.prepare(`SELECT ${cols} FROM sys_user WHERE id = ?`).get(id) as T | undefined;
+      return prepareStmt(db, `SELECT ${cols} FROM sys_user WHERE id = ?`).get(id) as T | undefined;
     },
     updateNickname(id: number, nickname: string) {
-      db.prepare('UPDATE sys_user SET nickname = ? WHERE id = ?').run(nickname, id);
+      prepareStmt(db, 'UPDATE sys_user SET nickname = ? WHERE id = ?').run(nickname, id);
     },
     deleteById(id: number): void {
-      db.prepare('DELETE FROM sys_user WHERE id = ?').run(id);
+      prepareStmt(db, 'DELETE FROM sys_user WHERE id = ?').run(id);
     },
     /**
      * 游客数据合并：把 from 账号的档案/测算记录/订单划转到 to 账号，
@@ -48,14 +48,14 @@ export function createUserRepo(db: Db) {
         const rec = db
           .prepare('UPDATE calculate_record SET user_id = ? WHERE user_id = ?')
           .run(toUserId, fromUserId);
-        db.prepare('UPDATE order_pay SET user_id = ? WHERE user_id = ?').run(toUserId, fromUserId);
-        db.prepare('DELETE FROM sys_user WHERE id = ?').run(fromUserId);
+        prepareStmt(db, 'UPDATE order_pay SET user_id = ? WHERE user_id = ?').run(toUserId, fromUserId);
+        prepareStmt(db, 'DELETE FROM sys_user WHERE id = ?').run(fromUserId);
         return { archives: Number(arch.changes), records: Number(rec.changes) };
       });
       return tx();
     },
     countByPhone(phone: string): number {
-      const row = db.prepare('SELECT COUNT(*) AS n FROM sys_user WHERE phone = ?').get(phone) as {
+      const row = prepareStmt(db, 'SELECT COUNT(*) AS n FROM sys_user WHERE phone = ?').get(phone) as {
         n: number;
       };
       return Number(row.n);

@@ -1,4 +1,4 @@
-import type { Db } from '../client.js';
+import { prepareStmt, type Db } from '../client.js';
 
 export interface RiskInput {
   year: string | null;
@@ -11,7 +11,7 @@ export interface RiskInput {
 export function createRiskRepo(db: Db) {
   return {
     insertBatch(recordId: number, items: RiskInput[]): void {
-      const stmt = db.prepare(
+      const stmt = prepareStmt(db, 
         'INSERT INTO risk_item (record_id, year, risk_level, trigger_condition, mitigation) VALUES (?, ?, ?, ?, ?)',
       );
       for (const it of items) {

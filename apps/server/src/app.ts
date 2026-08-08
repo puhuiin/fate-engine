@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Db } from './db/client.js';
+import { prepareStmt, type Db } from './db/client.js';
 import { createRepos } from './db/repo/index.js';
 import { config } from './config.js';
 import { authRoutes } from './routes/auth.js';
@@ -287,12 +287,11 @@ export function buildApp(db: Db, opts: BuildAppOpts = {}) {
   /** 数据库健康探测：聚合探针与就绪探针复用，避免重复样板 */
   const dbHealth = (): { ok: boolean; sizeBytes: number } => {
     try {
-      db.prepare('SELECT 1 AS ok').get();
-      const sizeRow = db
-        .prepare(
-          'SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()',
-        )
-        .get() as { bytes?: number };
+      prepareStmt(db, 'SELECT 1 AS ok').get();
+      const sizeRow = prepareStmt(
+        db,
+        'SELECT page_count * page_size AS bytes FROM pragma_page_count(), pragma_page_size()',
+      ).get() as { bytes?: number };
       return { ok: true, sizeBytes: Number(sizeRow?.bytes) || 0 };
     } catch {
       return { ok: false, sizeBytes: 0 };

@@ -1,4 +1,4 @@
-import type { Db } from '../client.js';
+import { prepareStmt, type Db } from '../client.js';
 
 export interface ArchiveInsert {
   userId: number;
@@ -48,7 +48,7 @@ export function createArchiveRepo(db: Db) {
       return Number(info.lastInsertRowid);
     },
     findById<T = Record<string, unknown>>(id: number) {
-      return db.prepare('SELECT * FROM user_birth_archive WHERE id = ?').get(id) as T | undefined;
+      return prepareStmt(db, 'SELECT * FROM user_birth_archive WHERE id = ?').get(id) as T | undefined;
     },
     findByUserIdAndId<T = Record<string, unknown>>(id: number, userId: number) {
       return db
@@ -61,7 +61,7 @@ export function createArchiveRepo(db: Db) {
         .all(userId) as Record<string, unknown>[];
     },
     update(id: number, userId: number, u: ArchiveUpdate) {
-      db.prepare(
+      prepareStmt(db, 
         `UPDATE user_birth_archive SET ${u.fields.join(', ')} WHERE id = ? AND user_id = ?`,
       ).run(...u.values, id, userId);
     },
@@ -75,12 +75,12 @@ export function createArchiveRepo(db: Db) {
     deleteCascade(archiveId: number, recordIds: number[]): void {
       const tx = db.transaction(() => {
         for (const rid of recordIds) {
-          db.prepare('DELETE FROM luck_plan WHERE record_id = ?').run(rid);
-          db.prepare('DELETE FROM risk_item WHERE record_id = ?').run(rid);
-          db.prepare('DELETE FROM order_pay WHERE record_id = ?').run(rid);
+          prepareStmt(db, 'DELETE FROM luck_plan WHERE record_id = ?').run(rid);
+          prepareStmt(db, 'DELETE FROM risk_item WHERE record_id = ?').run(rid);
+          prepareStmt(db, 'DELETE FROM order_pay WHERE record_id = ?').run(rid);
         }
-        db.prepare('DELETE FROM calculate_record WHERE archive_id = ?').run(archiveId);
-        db.prepare('DELETE FROM user_birth_archive WHERE id = ?').run(archiveId);
+        prepareStmt(db, 'DELETE FROM calculate_record WHERE archive_id = ?').run(archiveId);
+        prepareStmt(db, 'DELETE FROM user_birth_archive WHERE id = ?').run(archiveId);
       });
       tx();
     },
