@@ -16,7 +16,8 @@
     "verify:l3": "tsx scripts/verify_l3.ts",
     "verify:api": "tsx scripts/verify_api.ts",
     "verify:migrate": "tsx scripts/verify_migrate.ts",
-    "verify": "tsx scripts/verify_all.ts && tsx scripts/verify_l1.ts && tsx scripts/verify_l2.ts && tsx scripts/verify_l3.ts && tsx scripts/verify_api.ts && tsx scripts/verify_migrate.ts",
+    "verify:cache": "tsx scripts/verify_cache.ts",
+    "verify": "tsx scripts/verify_all.ts && tsx scripts/verify_l1.ts && tsx scripts/verify_l2.ts && tsx scripts/verify_l3.ts && tsx scripts/verify_api.ts && tsx scripts/verify_migrate.ts && tsx scripts/verify_cache.ts",
     "lint": "eslint src scripts",
     "lint:fix": "eslint src scripts --fix",
     "format": "prettier --write \"src/**/*.ts\" \"scripts/**/*.ts\""

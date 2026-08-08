@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyBaseLogger } from 'fastify';
 import { ok } from '../lib/util.js';
 import { ApiError } from '../lib/errors.js';
 import { assertSchema, requireIdParam } from '../lib/http.js';
@@ -10,7 +10,7 @@ import { runL2 } from '../modules/l2/l2.js';
 import { runL3 } from '../modules/l3/l3.js';
 import { runL4 } from '../modules/l4/l4.js';
 import { runL5 } from '../modules/l5/l5.js';
-import { runL6 } from '../modules/l6/l6.js';
+import { runL6, type L6Depth } from '../modules/l6/l6.js';
 import { runL7 } from '../modules/l7/l7.js';
 import { runL8, toPlanRows } from '../modules/l8/l8.js';
 import { toRiskRows } from '../modules/l6/risk.js';
@@ -30,6 +30,105 @@ interface ArchiveRow {
   source_reliability?: string;
 }
 
+/**
+ * 测算结果缓存：L1→L9 九层测算基于出生档案 + calcType 完全确定性，
+ * 相同输入重复 POST 会产生相同结果。缓存命中直接复用已计算的九层对象与报告，
+ * 跳过 lunar-javascript 的历法换算与多层推导，降低重复测算的 CPU 开销。
+ * 缓存键由「实际输入元组」构成（而非 archive.id），因此档案被编辑后输入变化
+ * 会自动触发重算，不存在陈旧缓存风险。仅缓存计算结果，每次 POST 仍照常落库新记录。
+ * 容量上限防止常驻内存无限增长（超出时淘汰最旧条目）。
+ */
+export interface CalcInput {
+  solarDate: string;
+  solarTime?: string;
+  timePrecision: TimePrecision;
+  sourceReliability: SourceReliability;
+  cityName?: string;
+  longitude?: number;
+  latitude?: number;
+  timezoneOffset: number;
+  gender: string;
+}
+
+interface CalcResult {
+  l1: ReturnType<typeof runL1>;
+  l2: ReturnType<typeof runL2>;
+  l3: ReturnType<typeof runL3>;
+  l4: ReturnType<typeof runL4>;
+  l5: ReturnType<typeof runL5>;
+  l6: ReturnType<typeof runL6>;
+  l7: ReturnType<typeof runL7>;
+  l8: ReturnType<typeof runL8>;
+  l9: ReturnType<typeof runL9>;
+  report: ReturnType<typeof buildNineLayerReport>;
+}
+
+export const CALC_CACHE_MAX = 1024;
+export const calcCache = new Map<string, CalcResult>();
+
+function calcCacheKey(input: CalcInput, calcType: string): string {
+  return [
+    input.solarDate,
+    input.solarTime ?? '',
+    input.timePrecision,
+    input.sourceReliability,
+    input.cityName ?? '',
+    input.longitude ?? '',
+    input.latitude ?? '',
+    input.timezoneOffset,
+    input.gender,
+    calcType,
+  ].join('|');
+}
+
+export function computeNineLayers(input: CalcInput, calcType: L6Depth, log: FastifyBaseLogger): CalcResult {
+  const key = calcCacheKey(input, calcType);
+  const hit = calcCache.get(key);
+  if (hit) return hit;
+
+  let result: CalcResult;
+  try {
+    const l1 = runL1({
+      solarDate: input.solarDate,
+      solarTime: input.solarTime,
+      timePrecision: input.timePrecision,
+      sourceReliability: input.sourceReliability,
+      cityName: input.cityName,
+      longitude: input.longitude,
+      latitude: input.latitude,
+      timezoneOffset: input.timezoneOffset,
+    });
+    const l2 = runL2(l1.timeCorrection.trueSolarClockTime, input.gender, l1.normalized.timeKnown);
+    const l3 = runL3(l2.bazi);
+    const l4 = runL4(l2.bazi);
+    const l5 = runL5(l2.bazi);
+    const l6 = runL6(l2.bazi, l4, l5, calcType);
+    const l7 = runL7(l1, l2, l4, l5);
+    const l8 = runL8(l4, l5, l2.bazi);
+    const l9 = runL9(l2.bazi, l4, l5, l7);
+    const report = buildNineLayerReport(l1, l2, l3, l4, l5, l6, l7, l8, l9);
+    result = { l1, l2, l3, l4, l5, l6, l7, l8, l9, report };
+  } catch (e) {
+    // 区分「输入校验类」与「测算引擎内部异常」：
+    // 出生信息类错误属用户输入问题 → 400 并给友好提示；
+    // 其余异常是引擎缺陷 → 500 并记服务端日志，不把内部堆栈泄漏给客户端。
+    if (e instanceof ApiError) throw e;
+    const msg = e instanceof Error ? e.message : '';
+    if (/非法|不合法|无法|无效|缺失|为空|不支持/.test(msg)) {
+      throw new ApiError(400, '出生信息不合法，请重新编辑档案');
+    }
+    log.error({ err: e }, '测算引擎内部异常');
+    throw new ApiError(500, '测算引擎开小差了，请稍后重试');
+  }
+
+  if (calcCache.size >= CALC_CACHE_MAX) {
+    const oldest = calcCache.keys().next().value;
+    if (oldest !== undefined) calcCache.delete(oldest);
+  }
+  calcCache.set(key, result);
+  return result;
+}
+
 export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
   /** 触发测算：阶段1 仅执行 L1 时空校正，返回九层报告结构 */
   app.post('/api/v1/calculate', { preHandler: app.authenticate }, async (req, reply) => {
@@ -39,53 +138,19 @@ export function calculateRoutes(app: FastifyInstance, repos: Repos): void {
       throw new ApiError(404, '档案不存在或无权访问');
     }
 
-    let l1: ReturnType<typeof runL1>;
-    let l2: ReturnType<typeof runL2>;
-    let l3: ReturnType<typeof runL3>;
-    let l4: ReturnType<typeof runL4>;
-    let l5: ReturnType<typeof runL5>;
-    let l6: ReturnType<typeof runL6>;
-    let l7: ReturnType<typeof runL7>;
-    let l8: ReturnType<typeof runL8>;
-    let l9: ReturnType<typeof runL9>;
-    try {
-      l1 = runL1({
-        solarDate: archive.solar_date,
-        solarTime: archive.solar_time ?? undefined,
-        timePrecision: (archive.time_precision ?? 'minute') as TimePrecision,
-        sourceReliability: (archive.source_reliability ?? 'unknown') as SourceReliability,
-        cityName: archive.city_name ?? undefined,
-        longitude: archive.longitude ?? undefined,
-        latitude: archive.latitude ?? undefined,
-        timezoneOffset: archive.timezone_offset ?? 8,
-      });
+    const input: CalcInput = {
+      solarDate: archive.solar_date,
+      solarTime: archive.solar_time ?? undefined,
+      timePrecision: (archive.time_precision ?? 'minute') as TimePrecision,
+      sourceReliability: (archive.source_reliability ?? 'unknown') as SourceReliability,
+      cityName: archive.city_name ?? undefined,
+      longitude: archive.longitude ?? undefined,
+      latitude: archive.latitude ?? undefined,
+      timezoneOffset: archive.timezone_offset ?? 8,
+      gender: archive.gender ?? 'other',
+    };
 
-      l2 = runL2(
-        l1.timeCorrection.trueSolarClockTime,
-        archive.gender ?? 'other',
-        l1.normalized.timeKnown,
-      );
-      l3 = runL3(l2.bazi);
-      l4 = runL4(l2.bazi);
-      l5 = runL5(l2.bazi);
-      l6 = runL6(l2.bazi, l4, l5, calcType);
-      l7 = runL7(l1, l2, l4, l5);
-      l8 = runL8(l4, l5, l2.bazi);
-      l9 = runL9(l2.bazi, l4, l5, l7);
-    } catch (e) {
-      // 区分「输入校验类」与「测算引擎内部异常」：
-      // 出生信息类错误属用户输入问题 → 400 并给友好提示；
-      // 其余异常是引擎缺陷 → 500 并记服务端日志，不把内部堆栈泄漏给客户端。
-      if (e instanceof ApiError) throw e;
-      const msg = e instanceof Error ? e.message : '';
-      if (/非法|不合法|无法|无效|缺失|为空|不支持/.test(msg)) {
-        throw new ApiError(400, '出生信息不合法，请重新编辑档案');
-      }
-      req.log.error({ err: e }, '测算引擎内部异常');
-      throw new ApiError(500, '测算引擎开小差了，请稍后重试');
-    }
-
-    const report = buildNineLayerReport(l1, l2, l3, l4, l5, l6, l7, l8, l9);
+    const { l1, l2, l3, l4, l5, l6, l7, l8, l9, report } = computeNineLayers(input, calcType, req.log);
 
     const tx = repos.db.transaction(() => {
       const recordId = repos.records.insert(
