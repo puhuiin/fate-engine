@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState 
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useReportData, type ReportInitialData } from '../hooks/useReportData';
 import { useReportExport } from '../hooks/useReportExport';
+import { deriveSynergy } from './report/derive';
 import { Skeleton, SkeletonCard, SkeletonRows } from '../components/Skeleton';
 import { LAYER_NAMES, MODULE_HINT, calcTypeDesc } from '../layers';
 import {
@@ -291,6 +292,24 @@ export default function Report() {
             <p className="dim plain-disclaimer">
               以上为启发式文化解读，仅供自我观察参考，不作任何决策依据。
             </p>
+          </section>
+        )}
+
+        {unlocked && data.l4 && data.l5 && data.l6 && data.l7 && data.l9 && (
+          <section className="exec-summary">
+            <h3>跨层一致性洞察</h3>
+            <p className="hint">把九层结论串成因果链：短板的源头、优势的出口、内核的呼应。</p>
+            <ul className="plain-points">
+              {deriveSynergy(data.l4, data.l5, data.l6, data.l7, data.l9).map((s, i) => (
+                <li key={i}>
+                  <span className="point-tag">{s.label}</span>
+                  <div>
+                    <strong>{s.label}</strong>
+                    <p>{s.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 

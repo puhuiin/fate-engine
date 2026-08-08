@@ -13,6 +13,7 @@ import type {
 import type { PlanItem, RiskItem } from '../../api/client';
 import { GLOSSARY_L1, GLOSSARY_L2, PlainGlossary, TermPlain } from './plain';
 import { fmtHour } from './exportText';
+import { deriveShishen, deriveXiJi, rankDimensions } from './derive';
 
 export { buildExportText } from './exportText';
 
@@ -153,6 +154,8 @@ type PillarRow = {
 
 function Layer2Raw({ l2 }: { l2: L2Result }) {
   const bazi = l2.bazi;
+  const xi = deriveXiJi(bazi);
+  const shishenInsight = deriveShishen(bazi);
   const pillars = (
     l2.schools.find((s) => s.school === '八字命理')?.data as { pillars: PillarRow[] } | undefined
   )?.pillars;
@@ -302,6 +305,36 @@ function Layer2Raw({ l2 }: { l2: L2Result }) {
             )}
           </tbody>
         </table>
+        <section className="xiji-section">
+          <h3>
+            <TermPlain term="五行喜忌" plain="日主旺衰对应的宜用与忌避五行" />
+            分析
+          </h3>
+          <div className="weights">
+            <span className="weight-chip">喜用 {xi.xi.join('、')}</span>
+            <span className="weight-chip">忌用 {xi.ji.join('、') || '无'}</span>
+          </div>
+          <p className="dim">
+            偏强 {xi.strongest[0]}（{xi.strongest[1]} 处） · 偏弱/缺失 {xi.weakest[0]}（
+            {xi.weakest[1]} 处）{xi.missing.length ? `；五行缺 ${xi.missing.join('、')}` : ''}
+          </p>
+          <p className="xiji-note">{xi.note}</p>
+        </section>
+        <section className="shishen-section">
+          <h3>
+            <TermPlain term="十神性格" plain="由十神结构推导的性格倾向，仅供参考" />
+            解读
+          </h3>
+          <ul className="plain-points">
+            {shishenInsight.map((t, i) => (
+              <li key={i}>
+                <div>
+                  <p>{t}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
         <div>
           <p className="sub-title">
             <TermPlain term="大运" plain="传统认为约每 10 年进入一个新阶段，仅作节奏参考" />
@@ -541,6 +574,7 @@ function Layer3Raw({ l3 }: { l3: L3Result }) {
 
 function Layer4Raw({ l4 }: { l4: L4Result }) {
   const w = l4.weightModel;
+  const { sorted, max, min } = rankDimensions(l4);
   return (
     <div className="l4-report">
       <section>
@@ -554,7 +588,7 @@ function Layer4Raw({ l4 }: { l4: L4Result }) {
       </section>
 
       <section>
-        <h3>六维落地评分</h3>
+        <h3>六维总览（按综合分排序）</h3>
         <table className="kv">
           <thead>
             <tr>
@@ -563,20 +597,27 @@ function Layer4Raw({ l4 }: { l4: L4Result }) {
               <th>流年</th>
               <th>人为</th>
               <th>加权总分</th>
+              <th>强弱</th>
             </tr>
           </thead>
           <tbody>
-            {l4.dimensions.map((d) => (
+            {sorted.map((d, i) => (
               <tr key={d.key}>
                 <td className="strong">{d.name}</td>
                 <td>{d.xiantian}</td>
                 <td>{d.liunian}</td>
                 <td className="renwei">{d.renwei}</td>
                 <td className="strong">{d.total}</td>
+                <td className={i === 0 ? 'strong' : ''}>
+                  {i === 0 ? '优势' : i === sorted.length - 1 ? '最需提升' : ''}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        <p className="dim">
+          最强 {max.name}（{max.total} 分）· 最需提升 {min.name}（{min.total} 分）
+        </p>
         <div className="advice-list">
           {l4.dimensions.map((d) => (
             <p key={d.key}>
