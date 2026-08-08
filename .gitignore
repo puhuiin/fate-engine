@@ -7,6 +7,9 @@ apps/web/dist/
 # Runtime data (local SQLite databases)
 apps/server/data/
 
+# PDF 报告生成产物（脚本输出，不入库）
+fate-report-test.pdf
+
 # Environment & secrets
 .env
 .env.local
